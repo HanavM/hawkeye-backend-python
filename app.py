@@ -21,7 +21,7 @@ class UserProfile(db.Model):
 # Simple test route
 @app.route('/test')
 def test():
-    return 'Test route is working!'
+    return 'Test route is working! hereherherherherheh'
 
 if __name__ == '__main__':
     app.run(debug=True)
