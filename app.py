@@ -1,31 +1,34 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-import os
+from azure.identity import ManagedIdentityCredential
+from sqlalchemy.engine import create_engine
 
 app = Flask(__name__)
 
-# Configure the database connection
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mssql+pyodbc://<username>:<password>@hawkeye-server-test.database.windows.net:1433/hawkeye-DB-test?driver=ODBC+Driver+17+for+SQL+Server'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Use the Managed Identity to get credentials
+credential = ManagedIdentityCredential()
 
-# Initialize the database
+# Connection string with Azure AD authentication using Managed Identity
+connection_string = "mssql+pyodbc://@hawkeye-server-test.database.windows.net/hawkeye-DB-test?driver=ODBC+Driver+17+for+SQL+Server&authentication=ActiveDirectoryMSI"
+
+# Set the SQLALCHEMY_DATABASE_URI configuration
+app.config['SQLALCHEMY_DATABASE_URI'] = connection_string
+
+# Initialize SQLAlchemy
 db = SQLAlchemy(app)
-
-# Define a simple User model for demonstration
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
 
 @app.route('/')
 def hello():
-    return "Hello, World!"
+    return "Hello, World! test: 2"
 
-# Endpoint to create the database tables
 @app.route('/create_db')
 def create_db():
-    db.create_all()
-    return "Database tables created!"
+    try:
+        db.create_all()
+        return "Database tables created successfully!", 200
+    except Exception as e:
+        return str(e), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8000, debug=True)
+
