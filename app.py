@@ -18,7 +18,7 @@ connection_string = f"mssql+pyodbc:///?odbc_connect={params}"
 
 @app.route('/')
 def hello():
-    return "Hello, World! test: 5"
+    return "Hello, World! test: 6"
 
 @app.route('/create_db')
 def create_db():
