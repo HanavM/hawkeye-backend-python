@@ -5,13 +5,10 @@ import urllib
 
 app = Flask(__name__)
 
-# Use the DefaultAzureCredential for Managed Identity
-credential = DefaultAzureCredential()
-
 # SQL Server details
 server = 'hawkeye-server-test.database.windows.net'
 database = 'hawkeye-DB-test'
-driver = 'ODBC+Driver+17+for+SQL+Server'
+driver = 'ODBC Driver 17 for SQL Server'  # Notice there is no '+' sign
 
 # Build the connection string
 params = urllib.parse.quote_plus(f'DRIVER={{{driver}}};SERVER={server};DATABASE={database};Authentication=ActiveDirectoryMSI;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')
@@ -21,7 +18,7 @@ connection_string = f"mssql+pyodbc:///?odbc_connect={params}"
 
 @app.route('/')
 def hello():
-    return "Hello, World! test: 4"
+    return "Hello, World! test: 5"
 
 @app.route('/create_db')
 def create_db():
