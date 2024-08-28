@@ -1,25 +1,30 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from azure.identity import ManagedIdentityCredential
-from sqlalchemy.engine import create_engine
+from azure.identity import DefaultAzureCredential
+import urllib
 
 app = Flask(__name__)
 
-# Use the Managed Identity to get credentials
-credential = ManagedIdentityCredential()
+# Use the DefaultAzureCredential for Managed Identity
+credential = DefaultAzureCredential()
 
-# Connection string with Azure AD authentication using Managed Identity
-connection_string = "mssql+pyodbc://@hawkeye-server-test.database.windows.net/hawkeye-DB-test?driver=ODBC+Driver+17+for+SQL+Server&authentication=ActiveDirectoryMSI"
+# SQL Server details
+server = 'hawkeye-server-test.database.windows.net'
+database = 'hawkeye-DB-test'
+driver = 'ODBC+Driver+17+for+SQL+Server'
+
+# Build the connection string
+params = urllib.parse.quote_plus(f'DRIVER={{{driver}}};SERVER={server};DATABASE={database};Authentication=ActiveDirectoryMSI;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;')
 
 # Set the SQLALCHEMY_DATABASE_URI configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = connection_string
+app.config['SQLALCHEMY_DATABASE_URI'] = f"mssql+pyodbc:///?odbc_connect={params}"
 
 # Initialize SQLAlchemy
 db = SQLAlchemy(app)
 
 @app.route('/')
 def hello():
-    return "Hello, World! test: 2"
+    return "Hello, World! test: 3"
 
 @app.route('/create_db')
 def create_db():
@@ -31,4 +36,3 @@ def create_db():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True)
-
