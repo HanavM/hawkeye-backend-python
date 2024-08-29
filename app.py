@@ -32,7 +32,7 @@ db = SQLAlchemy(app)
 
 @app.route('/')
 def hello():
-    return "Hello, World! test: 3"
+    return "Hello, World! test: 9"
 
 @app.route('/create_db')
 def create_db():
