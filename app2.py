@@ -37,3 +37,4 @@ def hello():
     with engine.connect() as conn:
         result = conn.execute("SELECT @@version")
         return str(result.fetchone())
+    
