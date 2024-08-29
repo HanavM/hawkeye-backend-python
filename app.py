@@ -5,8 +5,8 @@ import urllib
 
 app = Flask(__name__)
 
-# Use the DefaultAzureCredential for Managed Identity
-credential = DefaultAzureCredential()
+# Use DefaultAzureCredential, specifying the user-assigned managed identity
+credential = DefaultAzureCredential(managed_identity_client_id="f3b25b77-72be-46c4-b6dd-506f49c55bd9")
 
 # SQL Server details
 server = 'hawkeye-server-test.database.windows.net'
@@ -32,7 +32,7 @@ db = SQLAlchemy(app)
 
 @app.route('/')
 def hello():
-    return "Hello, World! test: 9"
+    return "Hello, World! test: 10"
 
 @app.route('/create_db')
 def create_db():
