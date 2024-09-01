@@ -16,7 +16,7 @@ MarkupSafe==2.1.5
 msal==1.30.0
 msal-extensions==1.2.0
 portalocker==2.10.1
-pycparser==2.22g
+pycparser==2.22
 PyJWT==2.9.0
 pyodbc==5.1.0
 requests==2.32.3
