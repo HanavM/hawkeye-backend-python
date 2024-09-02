@@ -1,7 +1,7 @@
 import os
 import pyodbc
 import struct
-from azure.identity import DefaultAzureCredential
+from azure.identity import ManagedIdentityCredential
 from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -11,7 +11,6 @@ class Person(BaseModel):
     last_name: Union[str, None] = None
 
 connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:hawkeye-server-test.database.windows.net,1433;Database=hawkeye-DB-test;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
-
 app = FastAPI()
 
 @app.get("/")
@@ -72,9 +71,8 @@ def create_person(item: Person):
         return {"error": str(e)}
     return item
 
-
 def get_conn():
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
+    credential = ManagedIdentityCredential(client_id="64713ecb-3848-4b00-8e99-35f315e07751")
     token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("UTF-16-LE")
     token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
     SQL_COPT_SS_ACCESS_TOKEN = 1256  # Connection option defined in msodbcsql.h
