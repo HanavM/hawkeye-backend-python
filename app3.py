@@ -64,11 +64,13 @@ def create_person(item: Person):
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", item.first_name, item.last_name)
+            cursor.execute(f"INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", item.first_name, item.last_name)
             conn.commit()
+            print(f"Inserted: {item.first_name} {item.last_name}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error inserting person: {e}")
     return item
+
 
 def get_conn():
     credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
