@@ -64,11 +64,12 @@ def create_person(item: Person):
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", item.first_name, item.last_name)
+            cursor.execute("INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", item.first_name, item.last_name)
             conn.commit()
             print(f"Inserted: {item.first_name} {item.last_name}")
     except Exception as e:
         print(f"Error inserting person: {e}")
+        return {"error": str(e)}
     return item
 
 
