@@ -37,10 +37,10 @@ def register_user(user: User):
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT INTO Users (Email, Password) VALUES (?, ?)", user.email, hashed_password)
+            cursor.execute("INSERT INTO Users (Email, HashedPassword) VALUES (?, ?)", user.email, hashed_password.decode('utf-8'))
             conn.commit()
     except Exception as e:
-        raise HTTPException(status_code=400, detail="Error creating user")
+        raise HTTPException(status_code=400, detail=f"Error creating user: {str(e)}")
 
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
@@ -50,12 +50,12 @@ def login_user(user: User):
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT Password FROM Users WHERE Email = ?", user.email)
+            cursor.execute("SELECT HashedPassword FROM Users WHERE Email = ?", user.email)
             db_user = cursor.fetchone()
-            if not db_user or not bcrypt.checkpw(user.password.encode('utf-8'), db_user.Password.encode('utf-8')):
+            if not db_user or not bcrypt.checkpw(user.password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
                 raise HTTPException(status_code=401, detail="Invalid credentials")
     except Exception as e:
-        raise HTTPException(status_code=400, detail="Error logging in")
+        raise HTTPException(status_code=400, detail=f"Error logging in: {str(e)}")
 
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
