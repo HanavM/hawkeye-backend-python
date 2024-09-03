@@ -23,7 +23,7 @@ class Token(BaseModel):
     token_type: str
 
 # Updated connection string with SQL authentication
-connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:hawkeye-server-test.database.windows.net,1433;Database=hawkeye-DB-test;Uid=Your_Sql_Admin_Username;Pwd=Your_Sql_Admin_Password;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:hawkeye-server-test.database.windows.net,1433;Database=hawkeye-DB-test;Uid=CloudSA1dee5af2;Pwd=Hanav@1811;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
 
 app = FastAPI()
 
