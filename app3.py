@@ -1,7 +1,5 @@
 import os
 import pyodbc
-import struct
-from azure.identity import DefaultAzureCredential
 from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -10,7 +8,17 @@ class Person(BaseModel):
     first_name: str
     last_name: Union[str, None] = None
 
-connection_string = "Driver={ODBC Driver 18 for SQL Server};Server=tcp:hawkeye-server-test.database.windows.net,1433;Database=hawkeye-DB-test;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+# Update the connection string with the new admin username and password
+connection_string = (
+    "Driver={ODBC Driver 18 for SQL Server};"
+    "Server=tcp:hawkeye-server-test.database.windows.net,1433;"
+    "Database=hawkeye-DB-test;"
+    "Uid=CloudSA1dee5af2;"
+    "Pwd=Hanav@1811;"
+    "Encrypt=yes;"
+    "TrustServerCertificate=no;"
+    "Connection Timeout=30;"
+)
 
 app = FastAPI()
 
@@ -64,7 +72,7 @@ def create_person(item: Person):
     try:
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", item.first_name, item.last_name)
+            cursor.execute("INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", item.first_name, item.last_name)
             conn.commit()
             print(f"Inserted: {item.first_name} {item.last_name}")
     except Exception as e:
@@ -73,9 +81,5 @@ def create_person(item: Person):
     return item
 
 def get_conn():
-    credential = DefaultAzureCredential(exclude_interactive_browser_credential=False)
-    token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("UTF-16-LE")
-    token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
-    SQL_COPT_SS_ACCESS_TOKEN = 1256  # Connection option defined in msodbcsql.h
-    conn = pyodbc.connect(connection_string, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct})
+    conn = pyodbc.connect(connection_string)
     return conn
