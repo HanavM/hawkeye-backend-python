@@ -72,7 +72,7 @@ def create_person(item: Person):
     return item
 
 def get_conn():
-    credential = ManagedIdentityCredential(client_id="64713ecb-3848-4b00-8e99-35f315e07751")
+    credential = ManagedIdentityCredential(client_id="56c8d02d-a909-4474-877e-bce444dfc54e")
     token_bytes = credential.get_token("https://database.windows.net/.default").token.encode("UTF-16-LE")
     token_struct = struct.pack(f'<I{len(token_bytes)}s', len(token_bytes), token_bytes)
     SQL_COPT_SS_ACCESS_TOKEN = 1256  # Connection option defined in msodbcsql.h
