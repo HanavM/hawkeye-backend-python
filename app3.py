@@ -53,6 +53,20 @@ def get_persons():
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error fetching persons: {str(e)}")
 
+@app.get("/person/{person_id}")
+def get_person(person_id: int):
+    try:
+        with get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Persons WHERE ID = ?", person_id)
+            row = cursor.fetchone()
+            if row:
+                return {"ID": row.ID, "FirstName": row.FirstName, "LastName": row.LastName}
+            else:
+                raise HTTPException(status_code=404, detail="Person not found")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching person: {str(e)}")
+
 @app.post("/register", response_model=Token)
 def register_user(user: User):
     hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
