@@ -29,7 +29,29 @@ app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"message": "Person API root"}
+    return {"message": "API root"}
+
+@app.post("/person")
+def create_person(person: Person):
+    try:
+        with get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO Persons (FirstName, LastName) VALUES (?, ?)", person.first_name, person.last_name)
+            conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error creating person: {str(e)}")
+    return {"message": "Person created successfully"}
+
+@app.get("/persons")
+def get_persons():
+    try:
+        with get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM Persons")
+            persons = cursor.fetchall()
+            return [{"ID": row.ID, "FirstName": row.FirstName, "LastName": row.LastName} for row in persons]
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching persons: {str(e)}")
 
 @app.post("/register", response_model=Token)
 def register_user(user: User):
