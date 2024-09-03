@@ -8,12 +8,12 @@ class Person(BaseModel):
     first_name: str
     last_name: Union[str, None] = None
 
-# Use your Azure AD credentials in the connection string
+# Updated connection string with Microsoft Entra admin details
 connection_string = (
     "Driver={ODBC Driver 18 for SQL Server};"
     "Server=tcp:hawkeye-server-test.database.windows.net,1433;"
     "Database=hawkeye-DB-test;"
-    "Uid=Hanav@hanavmw13gmail.onmicrosoft.com;"
+    "Uid=hanavmw13_gmail.com#EXT#@hanavmw13gmail.onmicrosoft.com;"
     "Pwd=Hiyaan@1108;"
     "Encrypt=yes;"
     "TrustServerCertificate=no;"
