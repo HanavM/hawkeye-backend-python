@@ -126,23 +126,38 @@ def login_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
-@app.post("/set_profile")
-def set_user_profile(profile: UserProfile, user: User = Depends(login_user)):
+@app.post("/set-profile")
+def set_user_profile(user: UserProfileRequest):
     try:
+        user_data = user.user  # Access the 'user' dictionary
+        profile_data = user.profile  # Access the 'profile' dictionary
+        
+        email = user_data.email  # Extract email
+        password = user_data.password  # Extract password
+        
         conn = get_conn()
         cursor = conn.cursor()
+        
+        # Ensure the user exists before setting profile
+        cursor.execute("SELECT * FROM Users WHERE Email = ?", email)
+        db_user = cursor.fetchone()
+        if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        # Insert or update the profile information
         cursor.execute("""
-            INSERT INTO UserProfiles (UserID, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
-            VALUES (
-                (SELECT ID FROM Users WHERE Email = ?),
-                ?, ?, ?, ?, ?, ?
-            )
-        """, user.email, profile.username, profile.age, profile.state, profile.snapchat_username, profile.instagram_username, profile.tinder_username)
+            INSERT INTO UserProfiles (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE Username = ?, Age = ?, State = ?, SnapchatUsername = ?, InstagramUsername = ?, TinderUsername = ?
+        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchatUsername, profile_data.instagramUsername, profile_data.tinderUsername,
+              profile_data.username, profile_data.age, profile_data.state, profile_data.snapchatUsername, profile_data.instagramUsername, profile_data.tinderUsername))
+        
         conn.commit()
+        return {"message": "Profile updated successfully"}
+        
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
 
-    return {"message": "User profile created successfully"}
 
 @app.get("/all", dependencies=[Depends(get_current_user)])
 def get_persons():
