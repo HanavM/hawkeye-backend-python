@@ -34,6 +34,11 @@ class UserProfile(BaseModel):
     instagram_username: Union[str, None] = None
     tinder_username: Union[str, None] = None
 
+class UserProfileRequest(BaseModel):
+    user: User
+    profile: UserProfile
+
+
 # Update the connection string with the new admin username and password
 connection_string = (
     "Driver={ODBC Driver 18 for SQL Server};"
@@ -127,12 +132,11 @@ def login_user(user: User):
     return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/set-profile")
-def set_user_profile(user: UserProfileRequest):
+def set_user_profile(user_profile: UserProfileRequest):
     try:
-        # Correctly access the fields from the Pydantic model
-        email = user.user.email
-        password = user.user.password
-        profile_data = user.profile
+        email = user_profile.user.email
+        password = user_profile.user.password
+        profile_data = user_profile.profile
         
         conn = get_conn()
         cursor = conn.cursor()
@@ -148,11 +152,15 @@ def set_user_profile(user: UserProfileRequest):
             INSERT INTO UserProfiles (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE Username = ?, Age = ?, State = ?, SnapchatUsername = ?, InstagramUsername = ?, TinderUsername = ?
-        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchatUsername, profile_data.instagramUsername, profile_data.tinderUsername,
-              profile_data.username, profile_data.age, profile_data.state, profile_data.snapchatUsername, profile_data.instagramUsername, profile_data.tinderUsername))
+        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username,
+              profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username))
         
         conn.commit()
         return {"message": "Profile updated successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
