@@ -129,21 +129,20 @@ def login_user(user: User):
 @app.post("/set-profile")
 def set_user_profile(user: UserProfileRequest):
     try:
-        user_data = user.user  # Access the 'user' dictionary
-        profile_data = user.profile  # Access the 'profile' dictionary
-        
-        email = user_data.email  # Extract email
-        password = user_data.password  # Extract password
+        # Correctly access the fields from the Pydantic model
+        email = user.user.email
+        password = user.user.password
+        profile_data = user.profile
         
         conn = get_conn()
         cursor = conn.cursor()
-        
+
         # Ensure the user exists before setting profile
         cursor.execute("SELECT * FROM Users WHERE Email = ?", email)
         db_user = cursor.fetchone()
         if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
-        
+
         # Insert or update the profile information
         cursor.execute("""
             INSERT INTO UserProfiles (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
@@ -157,6 +156,7 @@ def set_user_profile(user: UserProfileRequest):
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 
 @app.get("/all", dependencies=[Depends(get_current_user)])
