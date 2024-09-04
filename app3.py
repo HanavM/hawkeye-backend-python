@@ -149,18 +149,24 @@ def set_user_profile(user_profile: UserProfileRequest):
 
         # Insert or update the profile information
         cursor.execute("""
-            INSERT INTO UserProfiles (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE Username = ?, Age = ?, State = ?, SnapchatUsername = ?, InstagramUsername = ?, TinderUsername = ?
-        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username,
-              profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username))
+    MERGE INTO UserProfiles AS target
+    USING (VALUES (?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
+    ON target.Email = source.Email
+    WHEN MATCHED THEN 
+        UPDATE SET 
+            Username = source.Username, 
+            Age = source.Age, 
+            State = source.State, 
+            SnapchatUsername = source.SnapchatUsername, 
+            InstagramUsername = source.InstagramUsername, 
+            TinderUsername = source.TinderUsername
+    WHEN NOT MATCHED THEN
+        INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
+        VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername);
+""", (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username))
         
         conn.commit()
         return {"message": "Profile updated successfully"}
-        
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
-
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
