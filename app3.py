@@ -171,8 +171,6 @@ def set_user_profile(user_profile: UserProfileRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
 
-
-
 @app.get("/all", dependencies=[Depends(get_current_user)])
 def get_persons():
     rows = []
