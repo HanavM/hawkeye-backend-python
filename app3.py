@@ -4,10 +4,15 @@ import jwt
 import bcrypt
 from datetime import datetime, timedelta
 from typing import Union
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
+# JWT Secret Key
 SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
+ALGORITHM = "HS256"
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 class Person(BaseModel):
     first_name: str
@@ -34,6 +39,37 @@ connection_string = (
 )
 
 app = FastAPI()
+
+# Authentication Helper Functions
+
+def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=30)):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    payload = verify_token(token)
+    user_email = payload.get("sub")
+    if user_email is None:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user_email
+
+# Routes
 
 @app.get("/")
 def root():
@@ -82,15 +118,7 @@ def login_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
-def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=30)):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + expires_delta
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
-    return encoded_jwt
-
-
-@app.get("/all")
+@app.get("/all", dependencies=[Depends(get_current_user)])
 def get_persons():
     rows = []
     try:
@@ -102,7 +130,7 @@ def get_persons():
         print(f"Error: {e}")
     return rows
 
-@app.get("/person/{person_id}")
+@app.get("/person/{person_id}", dependencies=[Depends(get_current_user)])
 def get_person(person_id: int):
     try:
         with get_conn() as conn:
@@ -117,7 +145,7 @@ def get_person(person_id: int):
         print(f"Error: {e}")
     return {"error": "Unable to fetch person"}
 
-@app.post("/person")
+@app.post("/person", dependencies=[Depends(get_current_user)])
 def create_person(item: Person):
     try:
         with get_conn() as conn:
