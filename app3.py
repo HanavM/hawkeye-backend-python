@@ -26,6 +26,14 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class UserProfile(BaseModel):
+    username: str
+    age: int
+    state: str
+    snapchat_username: Union[str, None] = None
+    instagram_username: Union[str, None] = None
+    tinder_username: Union[str, None] = None
+
 # Update the connection string with the new admin username and password
 connection_string = (
     "Driver={ODBC Driver 18 for SQL Server};"
@@ -117,6 +125,24 @@ def login_user(user: User):
 
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
+
+@app.post("/set_profile")
+def set_user_profile(profile: UserProfile, user: User = Depends(login_user)):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO UserProfiles (UserID, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
+            VALUES (
+                (SELECT ID FROM Users WHERE Email = ?),
+                ?, ?, ?, ?, ?, ?
+            )
+        """, user.email, profile.username, profile.age, profile.state, profile.snapchat_username, profile.instagram_username, profile.tinder_username)
+        conn.commit()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
+    return {"message": "User profile created successfully"}
 
 @app.get("/all", dependencies=[Depends(get_current_user)])
 def get_persons():
