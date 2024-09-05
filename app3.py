@@ -127,36 +127,42 @@ def report_user_snapchat(report_request: ReportRequest):
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Insert new report into the Reports table
+        # Step 1: Insert new report into the Reports table
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
             VALUES (?, ?, ?, ?, ?)
         """, (report_request.reported_username, report_request.reporter_username, report_request.report_cause, report_date, report_request.report_description))
         
-        report_id = cursor.execute("SELECT SCOPE_IDENTITY()").fetchone()[0]  # Get the ID of the newly inserted report
+        # Get the new report's ID
+        new_report_id = cursor.execute("SELECT @@IDENTITY AS ID").fetchval()
 
-        # Check if the reported_username already exists in ReportedUsersSnapchat
+        # Step 2: Check if the user already exists in ReportedUsersSnapchat table
         cursor.execute("SELECT * FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
-        user_row = cursor.fetchone()
+        reported_user = cursor.fetchone()
 
-        if user_row:
-            # If user exists, update Report_Counts and link the new report
-            new_report_count = user_row.Report_Counts + 1
+        if reported_user:
+            # Step 3: If user exists, update the Report_Counts and associate new report
             cursor.execute("""
                 UPDATE ReportedUsersSnapchat
-                SET Report_Counts = ?, Report_IDs = ARRAY_APPEND(Report_IDs, ?)
+                SET Report_Counts = Report_Counts + 1
                 WHERE Username = ?
-            """, (new_report_count, report_id, report_request.reported_username))
+            """, report_request.reported_username)
         else:
-            # If user doesn't exist, insert new user with Report_Counts = 1
+            # Step 4: If user doesn't exist, create new entry for the reported user
             cursor.execute("""
-                INSERT INTO ReportedUsersSnapchat (Username, Report_Counts, Report_IDs)
-                VALUES (?, ?, ?)
-            """, (report_request.reported_username, 1, f"{report_id}"))
+                INSERT INTO ReportedUsersSnapchat (Username, Report_Counts)
+                VALUES (?, ?)
+            """, (report_request.reported_username, 1))
+
+        # Step 5: Link the report with the user in ReportedUsersReports
+        cursor.execute("""
+            INSERT INTO ReportedUsersReports (UserID, ReportID)
+            VALUES (?, ?)
+        """, (new_report_id, reported_user['ID'] if reported_user else cursor.execute("SELECT @@IDENTITY AS ID").fetchval()))
 
         conn.commit()
-        return {"message": "Report submitted successfully"}
-    
+        return {"message": "Report submitted and linked successfully"}
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
