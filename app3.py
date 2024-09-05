@@ -174,12 +174,15 @@ def report_user_snapchat(report_request: ReportRequest):
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 @app.get("/getReportsByUsername/{reported_username}")
-def get_reports_by_username(reported_username: str):
+def get_reports_by_username(reported_username: str, token: str = Depends(oauth2_scheme)):
     try:
+        # Get the current authenticated user
+        user_email = get_current_user(token)
+
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Check if the user exists in ReportedUsersSnapchat
+        # Check if the reported user exists in ReportedUsersSnapchat
         cursor.execute("SELECT ID FROM ReportedUsersSnapchat WHERE Username = ?", reported_username)
         user_row = cursor.fetchone()
         
@@ -211,10 +214,20 @@ def get_reports_by_username(reported_username: str):
                 "Report_Description": report.Report_Description
             })
 
+        # Update the user's Previously_Searched list in UserProfiles
+        cursor.execute("SELECT Previously_Searched FROM UserProfiles WHERE Email = ?", user_email)
+        previously_searched = cursor.fetchone()[0] or ""
+
+        if reported_username not in previously_searched.split(","):
+            updated_searched_list = (previously_searched + "," + reported_username).strip(",")
+            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ? WHERE Email = ?", updated_searched_list, user_email)
+
+        conn.commit()
         return {"reports": reports_data}
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 @app.get("/searchUsersByPrefix/{prefix}")
 def search_users_by_prefix(prefix: str):
