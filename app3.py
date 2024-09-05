@@ -132,12 +132,34 @@ def report_user_snapchat(report_request: ReportRequest):
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
             VALUES (?, ?, ?, ?, ?)
         """, (report_request.reported_username, report_request.reporter_username, report_request.report_cause, report_date, report_request.report_description))
+        
+        report_id = cursor.execute("SELECT SCOPE_IDENTITY()").fetchone()[0]  # Get the ID of the newly inserted report
+
+        # Check if the reported_username already exists in ReportedUsersSnapchat
+        cursor.execute("SELECT * FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
+        user_row = cursor.fetchone()
+
+        if user_row:
+            # If user exists, update Report_Counts and link the new report
+            new_report_count = user_row.Report_Counts + 1
+            cursor.execute("""
+                UPDATE ReportedUsersSnapchat
+                SET Report_Counts = ?, Report_IDs = ARRAY_APPEND(Report_IDs, ?)
+                WHERE Username = ?
+            """, (new_report_count, report_id, report_request.reported_username))
+        else:
+            # If user doesn't exist, insert new user with Report_Counts = 1
+            cursor.execute("""
+                INSERT INTO ReportedUsersSnapchat (Username, Report_Counts, Report_IDs)
+                VALUES (?, ?, ?)
+            """, (report_request.reported_username, 1, f"{report_id}"))
 
         conn.commit()
         return {"message": "Report submitted successfully"}
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 @app.post("/login", response_model=Token)
