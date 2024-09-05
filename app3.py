@@ -38,6 +38,12 @@ class UserProfileRequest(BaseModel):
     user: User
     profile: UserProfile
 
+class ReportRequest(BaseModel):
+    reported_username: str
+    reporter_username: str
+    report_cause: str
+    report_description: str
+
 
 # Update the connection string with the new admin username and password
 connection_string = (
@@ -52,8 +58,6 @@ connection_string = (
 )
 
 app = FastAPI()
-
-# Authentication Helper Functions
 
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=30)):
     to_encode = data.copy()
@@ -115,6 +119,26 @@ def register_user(user: User):
 
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
+
+@app.post("/reportUserSnapchat")
+def report_user_snapchat(report_request: ReportRequest):
+    try:
+        report_date = datetime.now()  # Set current timestamp for Report_Date
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Insert new report into the Reports table
+        cursor.execute("""
+            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
+            VALUES (?, ?, ?, ?, ?)
+        """, (report_request.reported_username, report_request.reporter_username, report_request.report_cause, report_date, report_request.report_description))
+
+        conn.commit()
+        return {"message": "Report submitted successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 @app.post("/login", response_model=Token)
 def login_user(user: User):
