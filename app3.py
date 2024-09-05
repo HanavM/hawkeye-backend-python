@@ -155,7 +155,9 @@ def report_user_snapchat(report_request: ReportRequest):
             """, (report_request.reported_username, 1))
 
             new_user_id = cursor.execute("SELECT SCOPE_IDENTITY()").fetchone()[0]
+            print(f"New User ID: {new_user_id}")  # Debugging log for UserID
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", new_user_id, report_id)
+            print(f"Report ID: {report_id}, User ID: {new_user_id}")  # Debugging log for ReportID
 
         conn.commit()
         return {"message": "Report submitted and user information updated successfully"}
