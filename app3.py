@@ -140,7 +140,7 @@ def report_user_snapchat(report_request: ReportRequest):
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
-        report_id = report_id_row
+        report_id = report_id_row[0]
         print(f"New Report ID: {report_id}")  # Debugging log for ReportID
 
         # Check if the reported username already exists in ReportedUsersSnapchat
@@ -175,10 +175,10 @@ def report_user_snapchat(report_request: ReportRequest):
             print(f"Report ID: {report_id}, User ID: {new_user_id}")  # Debugging log for ReportID
 
         conn.commit()
-        return {"message": "Report submitted and user information updated successfully", "Report ID": report_id}
+        return {"message": "Report submitted and user information updated successfully", "Report ID": report_id_row}
     
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error submitting report: reportID {report_id_row}:  {str(e)}")
 
 
 
