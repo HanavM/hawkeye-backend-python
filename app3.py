@@ -132,11 +132,15 @@ def report_user_snapchat(report_request: ReportRequest):
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
             VALUES (?, ?, ?, ?, ?)
         """, (report_request.reported_username, report_request.reporter_username, report_request.report_cause, report_date, report_request.report_description))
-        
-        conn.commit()  # Commit the insert before retrieving SCOPE_IDENTITY()
 
-        # Get the ID of the newly inserted report
-        report_id = cursor.execute("SELECT SCOPE_IDENTITY()").fetchone()[0]
+        conn.commit()  # Ensure the insert is committed
+
+        # Capture the last inserted Report ID
+        cursor.execute("SELECT SCOPE_IDENTITY()")
+        report_id_row = cursor.fetchone()
+        if report_id_row is None:
+            raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
+        report_id = report_id_row[0]
         print(f"New Report ID: {report_id}")  # Debugging log for ReportID
 
         # Check if the reported username already exists in ReportedUsersSnapchat
@@ -158,9 +162,13 @@ def report_user_snapchat(report_request: ReportRequest):
                 VALUES (?, ?)
             """, (report_request.reported_username, 1))
 
-            conn.commit()  # Commit the insert before retrieving SCOPE_IDENTITY()
+            conn.commit()  # Ensure the insert is committed
 
-            new_user_id = cursor.execute("SELECT SCOPE_IDENTITY()").fetchone()[0]
+            cursor.execute("SELECT SCOPE_IDENTITY()")
+            new_user_id_row = cursor.fetchone()
+            if new_user_id_row is None:
+                raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
+            new_user_id = new_user_id_row[0]
             user_id_final = new_user_id
             print(f"New User ID: {new_user_id}")  # Debugging log for UserID
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", new_user_id, report_id)
