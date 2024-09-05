@@ -140,11 +140,12 @@ def report_user_snapchat(report_request: ReportRequest):
         cursor.execute("SELECT ID, Report_Counts FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
         existing_user = cursor.fetchone()
 
+        user_id_final = "nothing"
         if existing_user:
             # If the user already exists, update the report counts and add the new report to ReportedUsersReports
             user_id, report_counts = existing_user
             new_report_count = report_counts + 1
-
+            user_id_final = user_id
             cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", new_report_count, user_id)
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", user_id, report_id)
         else:
@@ -155,12 +156,13 @@ def report_user_snapchat(report_request: ReportRequest):
             """, (report_request.reported_username, 1))
 
             new_user_id = cursor.execute("SELECT SCOPE_IDENTITY()").fetchone()[0]
+            user_id_final = new_user_id
             print(f"New User ID: {new_user_id}")  # Debugging log for UserID
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", new_user_id, report_id)
             print(f"Report ID: {report_id}, User ID: {new_user_id}")  # Debugging log for ReportID
 
         conn.commit()
-        return {"message": "Report submitted and user information updated successfully"}
+        return {"message": "Report submitted and user information updated successfully Report ID: {report_id}, User ID: {user_id_final}"}
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
