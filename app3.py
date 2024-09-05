@@ -173,6 +173,48 @@ def report_user_snapchat(report_request: ReportRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
+@app.get("/getReportsByUsername/{reported_username}")
+def get_reports_by_username(reported_username: str):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Check if the user exists in ReportedUsersSnapchat
+        cursor.execute("SELECT ID FROM ReportedUsersSnapchat WHERE Username = ?", reported_username)
+        user_row = cursor.fetchone()
+        
+        if not user_row:
+            return {"message": "User not found"}
+
+        user_id = user_row[0]
+
+        # Fetch all Report IDs linked to the user
+        cursor.execute("SELECT ReportID FROM ReportedUsersReports WHERE UserID = ?", user_id)
+        report_ids = [row[0] for row in cursor.fetchall()]
+        
+        if not report_ids:
+            return {"message": "No reports found for this user"}
+
+        # Fetch all the reports using the report IDs
+        cursor.execute(f"SELECT * FROM Reports WHERE ID IN ({','.join('?' * len(report_ids))})", *report_ids)
+        reports = cursor.fetchall()
+
+        # Format the results
+        reports_data = []
+        for report in reports:
+            reports_data.append({
+                "ID": report.ID,
+                "Reported_Username": report.Reported_Username,
+                "Reporter_Username": report.Reporter_Username,
+                "Report_Cause": report.Report_Cause,
+                "Report_Date": report.Report_Date,
+                "Report_Description": report.Report_Description
+            })
+
+        return {"reports": reports_data}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
 
 
 
