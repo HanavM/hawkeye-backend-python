@@ -175,10 +175,10 @@ def report_user_snapchat(report_request: ReportRequest):
             print(f"Report ID: {report_id}, User ID: {new_user_id}")  # Debugging log for ReportID
 
         conn.commit()
-        return {"message": "Report submitted and user information updated successfully", "Report ID": report_id_row}
+        return {"message": "Report submitted and user information updated successfully", "Report ID": report_id}
     
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error submitting report: reportID {report_id_row}:  {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 
 
