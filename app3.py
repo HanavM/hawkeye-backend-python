@@ -106,6 +106,7 @@ def root():
         print(f"Error: {e}")
     return {"message": "Person API root"}
 
+
 @app.post("/register", response_model=Token)
 def register_user(user: User):
     hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
@@ -238,6 +239,26 @@ def get_reports_by_username(reported_username: str, user_email: str = Depends(ge
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
 
 
+@app.get("/getPreviouslySearched", dependencies=[Depends(get_current_user)])
+def get_previously_searched(user_email: str = Depends(get_current_user)):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Fetch the previously searched values from the UserProfiles table
+        cursor.execute("SELECT Previously_Searched FROM UserProfiles WHERE Email = ?", user_email)
+        user_profile = cursor.fetchone()
+
+        if user_profile and user_profile[0]:
+            # Split the previously searched string into an array
+            previously_searched = user_profile[0].split(',')
+        else:
+            previously_searched = []
+
+        return {"previously_searched": previously_searched}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving previously searched: {str(e)}")
 
 
 
@@ -270,7 +291,6 @@ def search_users_by_prefix(prefix: str):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving users: {str(e)}")
-
 
 
 
@@ -328,6 +348,8 @@ def set_user_profile(user_profile: UserProfileRequest):
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
+
 
 @app.get("/all", dependencies=[Depends(get_current_user)])
 def get_persons():
