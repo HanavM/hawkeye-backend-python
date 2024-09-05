@@ -216,6 +216,34 @@ def get_reports_by_username(reported_username: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
 
+@app.get("/searchUsersByPrefix/{prefix}")
+def search_users_by_prefix(prefix: str):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Query to find all users whose Username starts with the prefix
+        cursor.execute("SELECT * FROM ReportedUsersSnapchat WHERE Username LIKE ?", prefix + '%')
+        users = cursor.fetchall()
+
+        if not users:
+            return {"message": "No users found with the given prefix"}
+
+        # Format the result
+        users_data = []
+        for user in users:
+            users_data.append({
+                "ID": user.ID,
+                "Username": user.Username,
+                "Snapchat_Account_FirstName": user.Snapchat_Account_FirstName,
+                "Snapchat_Account_LastName": user.Snapchat_Account_LastName,
+                "Report_Counts": user.Report_Counts
+            })
+
+        return {"users": users_data}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving users: {str(e)}")
 
 
 
