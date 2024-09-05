@@ -173,16 +173,13 @@ def report_user_snapchat(report_request: ReportRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
-@app.get("/getReportsByUsername/{reported_username}")
-def get_reports_by_username(reported_username: str, token: str = Depends(oauth2_scheme)):
+@app.get("/getReportsByUsername/{reported_username}", dependencies=[Depends(get_current_user)])
+def get_reports_by_username(reported_username: str, user_email: str = Depends(get_current_user)):
     try:
-        # Get the current authenticated user
-        user_email = get_current_user(token)
-
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Check if the reported user exists in ReportedUsersSnapchat
+        # Check if the user exists in ReportedUsersSnapchat
         cursor.execute("SELECT ID FROM ReportedUsersSnapchat WHERE Username = ?", reported_username)
         user_row = cursor.fetchone()
         
@@ -214,19 +211,35 @@ def get_reports_by_username(reported_username: str, token: str = Depends(oauth2_
                 "Report_Description": report.Report_Description
             })
 
-        # Update the user's Previously_Searched list in UserProfiles
+        # Fetch the user's profile to update the Previously_Searched field
         cursor.execute("SELECT Previously_Searched FROM UserProfiles WHERE Email = ?", user_email)
-        previously_searched = cursor.fetchone()[0] or ""
+        user_profile = cursor.fetchone()
 
-        if reported_username not in previously_searched.split(","):
-            updated_searched_list = (previously_searched + "," + reported_username).strip(",")
-            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ? WHERE Email = ?", updated_searched_list, user_email)
+        if user_profile and user_profile[0]:
+            previously_searched = user_profile[0].split(',')  # Assume it's stored as a comma-separated string
+            if reported_username not in previously_searched:
+                previously_searched.append(reported_username)
+            # Keep only the last 10 searches
+            if len(previously_searched) > 10:
+                previously_searched = previously_searched[-10:]
+            updated_searched = ','.join(previously_searched)
+        else:
+            # If the user hasn't searched before, start with the current search
+            updated_searched = reported_username
+
+        # Update the Previously_Searched field in the database
+        cursor.execute("UPDATE UserProfiles SET Previously_Searched = ? WHERE Email = ?", updated_searched, user_email)
 
         conn.commit()
+
         return {"reports": reports_data}
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
+
+
+
 
 
 @app.get("/searchUsersByPrefix/{prefix}")
