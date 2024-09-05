@@ -127,16 +127,14 @@ def report_user_snapchat(report_request: ReportRequest):
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Insert new report into the Reports table
+        # Insert new report into the Reports table and fetch the new Report ID in the same query
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
+            OUTPUT INSERTED.ID
             VALUES (?, ?, ?, ?, ?)
         """, (report_request.reported_username, report_request.reporter_username, report_request.report_cause, report_date, report_request.report_description))
-
-        conn.commit()  # Ensure the insert is committed
-
-        # Capture the last inserted Report ID
-        cursor.execute("SELECT SCOPE_IDENTITY()")
+        
+        # Fetch the Report ID
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
@@ -147,38 +145,34 @@ def report_user_snapchat(report_request: ReportRequest):
         cursor.execute("SELECT ID, Report_Counts FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
         existing_user = cursor.fetchone()
 
-        user_id_final = "nothing"
         if existing_user:
             # If the user already exists, update the report counts and add the new report to ReportedUsersReports
             user_id, report_counts = existing_user
             new_report_count = report_counts + 1
-            user_id_final = user_id
             cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", new_report_count, user_id)
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", user_id, report_id)
         else:
             # If the user doesn't exist, create a new entry in ReportedUsersSnapchat and link the report
             cursor.execute("""
                 INSERT INTO ReportedUsersSnapchat (Username, Report_Counts)
+                OUTPUT INSERTED.ID
                 VALUES (?, ?)
             """, (report_request.reported_username, 1))
 
-            conn.commit()  # Ensure the insert is committed
-
-            cursor.execute("SELECT SCOPE_IDENTITY()")
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             new_user_id = new_user_id_row[0]
-            user_id_final = new_user_id
             print(f"New User ID: {new_user_id}")  # Debugging log for UserID
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", new_user_id, report_id)
             print(f"Report ID: {report_id}, User ID: {new_user_id}")  # Debugging log for ReportID
 
         conn.commit()
         return {"message": "Report submitted and user information updated successfully", "Report ID": report_id}
-    
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
