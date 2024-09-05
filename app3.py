@@ -218,12 +218,16 @@ def get_reports_by_username(reported_username: str, user_email: str = Depends(ge
 
         if user_profile and user_profile[0]:
             previously_searched = user_profile[0].split(',')  # Assume it's stored as a comma-separated string
-            if reported_username not in previously_searched:
-                previously_searched.append(0,reported_username)
+            # if reported_username not in previously_searched:
+            
+            if (reported_username in previously_searched):
+                previously_searched.remove(reported_username)
             # Keep only the last 10 searches
             if len(previously_searched) > 10:
                 previously_searched = previously_searched[:9]
-                previously_searched.append(0,reported_username)
+            
+            previously_searched.insert(0,reported_username)
+
             updated_searched = ','.join(previously_searched)
         else:
             # If the user hasn't searched before, start with the current search
