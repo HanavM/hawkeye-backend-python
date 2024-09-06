@@ -122,57 +122,65 @@ def register_user(user: User):
     return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/reportUserSnapchat")
-def report_user_snapchat(report_request: ReportRequest):
+def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
     try:
-        report_date = datetime.now()  # Set current timestamp for Report_Date
+        # Extract the reporter's email from the authenticated token
+        payload = verify_token(token)
+        reporter_email = payload.get("sub")
+        if not reporter_email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Get the reporter's username from the UserProfiles table
         conn = get_conn()
         cursor = conn.cursor()
+        cursor.execute("SELECT Username FROM UserProfiles WHERE Email = ?", reporter_email)
+        reporter_row = cursor.fetchone()
+        if not reporter_row:
+            raise HTTPException(status_code=404, detail="Reporter not found")
+        
+        reporter_username = reporter_row[0]
 
-        # Insert new report into the Reports table and fetch the new Report ID in the same query
+        # Insert new report into the Reports table and fetch the new Report ID
+        report_date = datetime.now()
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
             OUTPUT INSERTED.ID
             VALUES (?, ?, ?, ?, ?)
-        """, (report_request.reported_username, report_request.reporter_username, report_request.report_cause, report_date, report_request.report_description))
-        
+        """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description))
+
         # Fetch the Report ID
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
-        print(f"New Report ID: {report_id}")  # Debugging log for ReportID
 
-        # Check if the reported username already exists in ReportedUsersSnapchat
+        # Check if the reported username exists in ReportedUsersSnapchat
         cursor.execute("SELECT ID, Report_Counts FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
         existing_user = cursor.fetchone()
 
         if existing_user:
-            # If the user already exists, update the report counts and add the new report to ReportedUsersReports
             user_id, report_counts = existing_user
             new_report_count = report_counts + 1
             cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", new_report_count, user_id)
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", user_id, report_id)
         else:
-            # If the user doesn't exist, create a new entry in ReportedUsersSnapchat and link the report
             cursor.execute("""
                 INSERT INTO ReportedUsersSnapchat (Username, Report_Counts)
                 OUTPUT INSERTED.ID
                 VALUES (?, ?)
             """, (report_request.reported_username, 1))
-
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             new_user_id = new_user_id_row[0]
-            print(f"New User ID: {new_user_id}")  # Debugging log for UserID
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", new_user_id, report_id)
-            print(f"Report ID: {report_id}, User ID: {new_user_id}")  # Debugging log for ReportID
 
         conn.commit()
-        return {"message": "Report submitted and user information updated successfully", "Report ID": report_id}
-
+        return {"message": "Report submitted successfully", "Report ID": report_id}
+    
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 @app.get("/getReportsByUsername/{reported_username}", dependencies=[Depends(get_current_user)])
 def get_reports_by_username(reported_username: str, user_email: str = Depends(get_current_user)):
