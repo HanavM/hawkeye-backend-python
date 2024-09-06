@@ -40,7 +40,6 @@ class UserProfileRequest(BaseModel):
 
 class ReportRequest(BaseModel):
     reported_username: str
-    reporter_username: str
     report_cause: str
     report_description: str
 
