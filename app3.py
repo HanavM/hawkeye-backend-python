@@ -230,7 +230,7 @@ def get_reports_by_username(reported_username: str, user_email: str = Depends(ge
             if (reported_username in previously_searched):
                 previously_searched.remove(reported_username)
             # Keep only the last 10 searches
-            if len(previously_searched) > 10:
+            if len(previously_searched) >= 10:
                 previously_searched = previously_searched[:9]
             
             previously_searched.insert(0,reported_username)
