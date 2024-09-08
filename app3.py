@@ -139,6 +139,16 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         
         reporter_username = reporter_row[0]
 
+        #new code
+        cursor.execute("SELECT ID FROM UserProfiles WHERE Email = ?", reporter_email)
+        reporter_row = cursor.fetchone()
+        if not reporter_row:
+            raise HTTPException(status_code=404, detail="Reporter not found")
+        
+        reporter_id = reporter_row[0]
+        #new code
+
+
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
         cursor.execute("""
@@ -161,7 +171,9 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             user_id, report_counts = existing_user
             new_report_count = report_counts + 1
             cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", new_report_count, user_id)
-            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", user_id, report_id)
+            #new code
+            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?)", user_id, report_id, user_id)
+            #new code
         else:
             cursor.execute("""
                 INSERT INTO ReportedUsersSnapchat (Username, Report_Counts)
@@ -172,7 +184,7 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             new_user_id = new_user_id_row[0]
-            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID) VALUES (?, ?)", new_user_id, report_id)
+            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?)", new_user_id, report_id, user_id)
 
         conn.commit()
         return {"message": "Report submitted successfully", "Report ID": report_id}
