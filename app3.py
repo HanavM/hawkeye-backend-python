@@ -172,7 +172,7 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             new_report_count = report_counts + 1
             cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", new_report_count, user_id)
             #new code
-            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?)", user_id, report_id, user_id)
+            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?)", user_id, report_id, reporter_id)
             #new code
         else:
             cursor.execute("""
@@ -184,7 +184,11 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             new_user_id = new_user_id_row[0]
-            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?)", new_user_id, report_id, user_id)
+
+            #new code
+            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?)", new_user_id, report_id, reporter_id)
+            #new code
+    
 
         conn.commit()
         return {"message": "Report submitted successfully", "Report ID": report_id}
