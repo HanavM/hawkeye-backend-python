@@ -286,6 +286,49 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Error retrieving previously searched: {str(e)}")
 
 
+@app.get("/getReportsByUser", dependencies=[Depends(get_current_user)])
+def get_reports_by_user(user_email: str = Depends(get_current_user)):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Get the User ID from the UserProfiles table using the email
+        cursor.execute("SELECT ID FROM UserProfiles WHERE Email = ?", user_email)
+        user_row = cursor.fetchone()
+        
+        if not user_row:
+            return {"message": "User not found"}
+
+        reporter_user_id = user_row[0]
+
+        # Fetch all Report IDs linked to the user (reports submitted by this user)
+        cursor.execute("SELECT ReportID FROM ReportedUsersReports WHERE UserReportingID = ?", reporter_user_id)
+        report_ids = [row[0] for row in cursor.fetchall()]
+        
+        if not report_ids:
+            return {"message": "No reports found for this user"}
+
+        # Fetch all the reports using the report IDs
+        cursor.execute(f"SELECT * FROM Reports WHERE ID IN ({','.join('?' * len(report_ids))})", report_ids)
+        reports = cursor.fetchall()
+
+        # Format the results
+        reports_data = []
+        for report in reports:
+            reports_data.append({
+                "ID": report.ID,
+                "Reported_Username": report.Reported_Username,
+                "Reporter_Username": report.Reporter_Username,
+                "Report_Cause": report.Report_Cause,
+                "Report_Date": report.Report_Date,
+                "Report_Description": report.Report_Description
+            })
+
+        return {"reports": reports_data}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 
 @app.get("/searchUsersByPrefix/{prefix}")
