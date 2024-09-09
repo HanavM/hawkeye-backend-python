@@ -121,6 +121,8 @@ def register_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
+import requests
+
 @app.post("/reportUserSnapchat")
 def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
     try:
@@ -157,14 +159,29 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
 
         data = response.json()
 
-        # Extract the 'name' field from the response
-        full_name = data["json"][0].get("name", "")
-        if not full_name:
-            first_name, last_name = "", ""  # Handle case where no name is returned
+        # Assuming the response is a JSON array like in Swift code
+        if isinstance(data, list) and len(data) > 0:
+            first_item = data[0]
+            
+            # Log the full response for debugging
+            print(f"API Response: {data}")
+
+            # Handle the case where the name is nested within "result"
+            result = first_item.get("result", [])
+            if result and isinstance(result, list) and len(result) > 0:
+                user_info = result[0]  # Access the first item in the result list
+                full_name = user_info.get("name", "")
+            else:
+                full_name = ""
+
+            if not full_name:
+                first_name, last_name = "", ""  # Handle case where no name is returned
+            else:
+                name_parts = full_name.split(" ")
+                first_name = name_parts[0]  # First name is always present
+                last_name = name_parts[1] if len(name_parts) > 1 else ""  # Handle missing last name
         else:
-            name_parts = full_name.split(" ")
-            first_name = name_parts[0]  # First name is always present
-            last_name = name_parts[1] if len(name_parts) > 1 else ""  # Handle missing last name
+            raise HTTPException(status_code=500, detail="Unexpected API response format")
 
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
@@ -212,6 +229,7 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         import traceback
         traceback.print_exc()  # Log full exception
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
