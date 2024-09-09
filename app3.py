@@ -181,13 +181,13 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             name_parts = full_name.split(" ")
             first_name = name_parts[0]
             last_name = name_parts[1] if len(name_parts) > 1 else ""
-        
+
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
             OUTPUT INSERTED.ID
-            VALUES (?, ?, ?, ?, ?,)
+            VALUES (?, ?, ?, ?, ?)
         """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description))
 
         # Fetch the Report ID
