@@ -140,18 +140,30 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         
         reporter_username = reporter_row[0]
 
-        # Fetch the reporter's ID (new code)
+        # Fetch the reporter's ID
         cursor.execute("SELECT ID FROM UserProfiles WHERE Email = ?", reporter_email)
         reporter_row = cursor.fetchone()
         if not reporter_row:
             raise HTTPException(status_code=404, detail="Reporter not found")
         
-        reporter_id = reporter_row[0]  # Correctly store reporter's UserProfile ID
+        reporter_id = reporter_row[0]
 
+        # Call Snapchat Profile Scraper API to get the reported user's name (with timeout of 60 seconds)
         # Call Snapchat Profile Scraper API to get the reported user's name
         api_url = "https://api.apify.com/v2/acts/argusapi~snapchat-profile-scraper/run-sync-get-dataset-items?token=apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me"
-        response = requests.post(api_url, json={"username": [report_request.reported_username]})
-        
+        response = requests.post(api_url, json={"username": [report_request.reported_username]}, timeout=60)
+
+        # Log the response for debugging
+        print(f"Snapchat API Response: {response.text}")
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
+
+        try:
+            response = requests.post(api_url, json={"username": [report_request.reported_username]}, timeout=60)
+        except requests.Timeout:
+            raise HTTPException(status_code=504, detail="Snapchat API timed out")
+
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
 
@@ -209,7 +221,11 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         return {"message": "Report submitted successfully", "Report ID": report_id}
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # This will print the full error in the logs
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
+
 
 
 @app.get("/getReportsByUsername/{reported_username}", dependencies=[Depends(get_current_user)])
