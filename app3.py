@@ -7,6 +7,7 @@ from typing import Union
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
+import requests
 
 # JWT Secret Key
 SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
@@ -147,13 +148,31 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         
         reporter_id = reporter_row[0]  # Correctly store reporter's UserProfile ID
 
+        # Call Snapchat Profile Scraper API to get the reported user's name
+        api_url = "https://api.apify.com/v2/acts/argusapi~snapchat-profile-scraper/run-sync-get-dataset-items?token=apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me"
+        response = requests.post(api_url, json={"username": [report_request.reported_username]})
+        
+        if response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
+
+        data = response.json()
+
+        # Extract the 'name' field from the response
+        full_name = data["json"].get("name", "")
+        if not full_name:
+            first_name, last_name = "", ""  # Handle case where no name is returned
+        else:
+            name_parts = full_name.split(" ")
+            first_name = name_parts[0]  # First name is always present
+            last_name = name_parts[1] if len(name_parts) > 1 else ""  # Last name might be missing
+
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
         cursor.execute("""
-            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
+            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Snapchat_Account_FirstName, Snapchat_Account_LastName)
             OUTPUT INSERTED.ID
-            VALUES (?, ?, ?, ?, ?)
-        """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description))
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description, first_name, last_name))
 
         # Fetch the Report ID
         report_id_row = cursor.fetchone()
@@ -191,7 +210,6 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
-
 
 
 @app.get("/getReportsByUsername/{reported_username}", dependencies=[Depends(get_current_user)])
@@ -330,7 +348,6 @@ def get_reports_by_user(user_email: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
 
 
-
 @app.get("/searchUsersByPrefix/{prefix}")
 def search_users_by_prefix(prefix: str):
     try:
@@ -359,7 +376,6 @@ def search_users_by_prefix(prefix: str):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving users: {str(e)}")
-
 
 
 @app.post("/login", response_model=Token)
