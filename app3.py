@@ -151,8 +151,74 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         
         reporter_id = reporter_row[0]
 
+        # Step 1: Call Snapchat API first to validate the reported username
+        run_input = { "username": [report_request.reported_username] }
+        try:
+            run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
+            dataset_id = run["defaultDatasetId"]
 
-        # Insert new report into the Reports table and fetch the new Report ID
+            # Fetch the dataset items
+            dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
+            
+            if not dataset_items:
+                raise Exception("No data retrieved from Snapchat API")
+            
+            # Accessing the first item from the dataset items
+            first_item = dataset_items[0] if dataset_items else None
+
+            if first_item and 'result' in first_item:
+                result = first_item['result'][0]  # Access the first result dictionary
+
+                # Check if the account is "no_exist_or_banned"
+                if result.get("accountType", "") == "no_exist_or_banned":
+                    return {"message": "This account does not exist, the report was not submitted."}
+
+                # Extract the name
+                full_name = result.get('name', '')
+                if full_name:
+                    name_parts = full_name.split(" ")
+                    first_name = name_parts[0]
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""
+                else:
+                    first_name, last_name = "", ""
+
+        except Exception as e:
+            print(f"Error retrieving data from Snapchat API: {str(e)}")
+            raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
+
+        # Step 2: Check if the reported username already exists in the database
+        cursor.execute("SELECT ID, Report_Counts, Snapchat_Account_FirstName, Snapchat_Account_LastName FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            # The user already exists in the database
+            user_id, report_counts, db_first_name, db_last_name = existing_user
+
+            # If the user doesn't have a name in the database, update it
+            if not db_first_name or not db_last_name:
+                cursor.execute("""
+                    UPDATE ReportedUsersSnapchat
+                    SET Snapchat_Account_FirstName = ?, Snapchat_Account_LastName = ?
+                    WHERE ID = ?
+                """, (first_name, last_name, user_id))
+
+            # Increment the report counts
+            new_report_count = report_counts + 1
+            cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
+
+        else:
+            # Step 3: If the user doesn't exist in the database, insert them
+            cursor.execute("""
+                INSERT INTO ReportedUsersSnapchat (Username, Snapchat_Account_FirstName, Snapchat_Account_LastName, Report_Counts)
+                OUTPUT INSERTED.ID
+                VALUES (?, ?, ?, ?)
+            """, (report_request.reported_username, first_name, last_name, 1))
+            new_user_id_row = cursor.fetchone()
+            if new_user_id_row is None:
+                raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
+            user_id = new_user_id_row[0]
+
+        # Step 4: Insert the report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
@@ -160,82 +226,13 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             VALUES (?, ?, ?, ?, ?)
         """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description))
 
-        # Fetch the Report ID
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Check if the reported username exists in ReportedUsersSnapchat
-        cursor.execute("SELECT ID, Report_Counts FROM ReportedUsersSnapchat WHERE Username = ?", report_request.reported_username)
-        existing_user = cursor.fetchone()
-
-        if existing_user:
-            user_id, report_counts = existing_user
-            new_report_count = report_counts + 1
-            cursor.execute("UPDATE ReportedUsersSnapchat SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
-            
-            # Insert into ReportedUsersReports, passing parameters as a tuple
-            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
-        else:
-            # Prepare the Actor input
-            run_input = { "username": [report_request.reported_username] }
-            try:
-                run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
-                dataset_id = run["defaultDatasetId"]
-
-                # Fetch the dataset items
-                dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
-                
-                if not dataset_items:
-                    raise Exception("No data retrieved from Snapchat API")
-                
-                # Accessing the first item from the dataset items
-                first_item = dataset_items[0] if dataset_items else None
-
-                if first_item and 'result' in first_item:
-                    result = first_item['result'][0]  # Access the first result dictionary
-
-                    # Extract fields from the result
-                    full_name = result.get('name', '')
-                    account_type = result.get('accountType', '')
-                    snapcode_url = result.get('snapcodeURL', '')
-                    bitmoji_url = result.get('privateAccountData', {}).get('bitmojiURL', '')
-
-                    # Print the extracted fields
-                    print(f"Full Name: {full_name}")
-                    print(f"Account Type: {account_type}")
-                    print(f"Snapcode URL: {snapcode_url}")
-                    print(f"Bitmoji URL: {bitmoji_url}")
-                else:
-                    print("No valid data found.")
-                
-            except Exception as e:
-                print(f"Error retrieving data from Snapchat API: {str(e)}")
-
-            # Extract the name from the Snapchat data
-            
-            first_name = ""
-            last_name = ""
-            if not full_name:
-                first_name, last_name = "", ""
-            else:
-                name_parts = full_name.split(" ")
-                first_name = name_parts[0]
-                last_name = name_parts[1] if len(name_parts) > 1 else ""
-
-            cursor.execute("""
-                INSERT INTO ReportedUsersSnapchat (Username, Snapchat_Account_FirstName, Snapchat_Account_LastName, Report_Counts)
-                OUTPUT INSERTED.ID
-                VALUES (?, ?, ?, ?)
-            """, (report_request.reported_username,first_name ,last_name, 1))
-            new_user_id_row = cursor.fetchone()
-            if new_user_id_row is None:
-                raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
-            new_user_id = new_user_id_row[0]
-            
-            # Insert into ReportedUsersReports, passing parameters as a tuple
-            cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?, ?)", (new_user_id, report_id, reporter_id))
+        # Link the report to the user
+        cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
         return {"message": "Report submitted successfully", "Report ID": report_id}
@@ -244,6 +241,8 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         import traceback
         traceback.print_exc()  # Log full exception
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
+
 
 
 
