@@ -151,51 +151,6 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         
         reporter_id = reporter_row[0]
 
-        # Prepare the Actor input
-        run_input = { "username": [report_request.reported_username] }
-        try:
-            run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
-            dataset_id = run["defaultDatasetId"]
-
-            # Fetch the dataset items
-            dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
-            
-            if not dataset_items:
-                raise Exception("No data retrieved from Snapchat API")
-            
-            # Accessing the first item from the dataset items
-            first_item = dataset_items[0] if dataset_items else None
-
-            if first_item and 'result' in first_item:
-                result = first_item['result'][0]  # Access the first result dictionary
-
-                # Extract fields from the result
-                full_name = result.get('name', '')
-                account_type = result.get('accountType', '')
-                snapcode_url = result.get('snapcodeURL', '')
-                bitmoji_url = result.get('privateAccountData', {}).get('bitmojiURL', '')
-
-                # Print the extracted fields
-                print(f"Full Name: {full_name}")
-                print(f"Account Type: {account_type}")
-                print(f"Snapcode URL: {snapcode_url}")
-                print(f"Bitmoji URL: {bitmoji_url}")
-            else:
-                print("No valid data found.")
-            
-        except Exception as e:
-            print(f"Error retrieving data from Snapchat API: {str(e)}")
-
-        # Extract the name from the Snapchat data
-        
-        first_name = ""
-        last_name = ""
-        if not full_name:
-            first_name, last_name = "", ""
-        else:
-            name_parts = full_name.split(" ")
-            first_name = name_parts[0]
-            last_name = name_parts[1] if len(name_parts) > 1 else ""
 
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
@@ -223,6 +178,52 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             # Insert into ReportedUsersReports, passing parameters as a tuple
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
         else:
+            # Prepare the Actor input
+            run_input = { "username": [report_request.reported_username] }
+            try:
+                run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
+                dataset_id = run["defaultDatasetId"]
+
+                # Fetch the dataset items
+                dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
+                
+                if not dataset_items:
+                    raise Exception("No data retrieved from Snapchat API")
+                
+                # Accessing the first item from the dataset items
+                first_item = dataset_items[0] if dataset_items else None
+
+                if first_item and 'result' in first_item:
+                    result = first_item['result'][0]  # Access the first result dictionary
+
+                    # Extract fields from the result
+                    full_name = result.get('name', '')
+                    account_type = result.get('accountType', '')
+                    snapcode_url = result.get('snapcodeURL', '')
+                    bitmoji_url = result.get('privateAccountData', {}).get('bitmojiURL', '')
+
+                    # Print the extracted fields
+                    print(f"Full Name: {full_name}")
+                    print(f"Account Type: {account_type}")
+                    print(f"Snapcode URL: {snapcode_url}")
+                    print(f"Bitmoji URL: {bitmoji_url}")
+                else:
+                    print("No valid data found.")
+                
+            except Exception as e:
+                print(f"Error retrieving data from Snapchat API: {str(e)}")
+
+            # Extract the name from the Snapchat data
+            
+            first_name = ""
+            last_name = ""
+            if not full_name:
+                first_name, last_name = "", ""
+            else:
+                name_parts = full_name.split(" ")
+                first_name = name_parts[0]
+                last_name = name_parts[1] if len(name_parts) > 1 else ""
+
             cursor.execute("""
                 INSERT INTO ReportedUsersSnapchat (Username, Snapchat_Account_FirstName, Snapchat_Account_LastName, Report_Counts)
                 OUTPUT INSERTED.ID
