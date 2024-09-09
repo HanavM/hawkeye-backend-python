@@ -173,20 +173,22 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
 
         # Extract the name from the Snapchat data
         full_name = snapchat_data.get("name", "")
+        first_name = ""
+        last_name = ""
         if not full_name:
             first_name, last_name = "", ""
         else:
             name_parts = full_name.split(" ")
             first_name = name_parts[0]
             last_name = name_parts[1] if len(name_parts) > 1 else ""
-
+        
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
         cursor.execute("""
-            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Snapchat_Account_FirstName, Snapchat_Account_LastName)
+            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description)
             OUTPUT INSERTED.ID
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description, first_name, last_name))
+            VALUES (?, ?, ?, ?, ?,)
+        """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description))
 
         # Fetch the Report ID
         report_id_row = cursor.fetchone()
@@ -207,10 +209,10 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
             cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
         else:
             cursor.execute("""
-                INSERT INTO ReportedUsersSnapchat (Username, Report_Counts)
+                INSERT INTO ReportedUsersSnapchat (Username, Snapchat_Account_FirstName, Snapchat_Account_LastName, Report_Counts)
                 OUTPUT INSERTED.ID
-                VALUES (?, ?)
-            """, (report_request.reported_username, 1))
+                VALUES (?, ?, ?, ?)
+            """, (report_request.reported_username,first_name ,last_name, 1))
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
