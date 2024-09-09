@@ -149,34 +149,22 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         reporter_id = reporter_row[0]
 
         # Call Snapchat Profile Scraper API to get the reported user's name (with timeout of 60 seconds)
-        # Call Snapchat Profile Scraper API to get the reported user's name
         api_url = "https://api.apify.com/v2/acts/argusapi~snapchat-profile-scraper/run-sync-get-dataset-items?token=apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me"
         response = requests.post(api_url, json={"username": [report_request.reported_username]}, timeout=60)
-
-        # Log the response for debugging
-        print(f"Snapchat API Response: {response.text}")
-
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
-
-        try:
-            response = requests.post(api_url, json={"username": [report_request.reported_username]}, timeout=60)
-        except requests.Timeout:
-            raise HTTPException(status_code=504, detail="Snapchat API timed out")
-
+        
         if response.status_code != 200:
             raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
 
         data = response.json()
 
         # Extract the 'name' field from the response
-        full_name = data["json"].get("name", "")
+        full_name = data["json"][0].get("name", "")
         if not full_name:
             first_name, last_name = "", ""  # Handle case where no name is returned
         else:
             name_parts = full_name.split(" ")
             first_name = name_parts[0]  # First name is always present
-            last_name = name_parts[1] if len(name_parts) > 1 else ""  # Last name might be missing
+            last_name = name_parts[1] if len(name_parts) > 1 else ""  # Handle missing last name
 
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
@@ -222,7 +210,7 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
     
     except Exception as e:
         import traceback
-        traceback.print_exc()  # This will print the full error in the logs
+        traceback.print_exc()  # Log full exception
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 
