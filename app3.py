@@ -8,10 +8,13 @@ from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 import requests
+from apify_client import ApifyClient
 
 # JWT Secret Key
 SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
 ALGORITHM = "HS256"
+
+client = ApifyClient("apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -121,8 +124,6 @@ def register_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
-import requests
-
 @app.post("/reportUserSnapchat")
 def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
     try:
@@ -150,38 +151,34 @@ def report_user_snapchat(report_request: ReportRequest, token: str = Depends(oau
         
         reporter_id = reporter_row[0]
 
-        # Call Snapchat Profile Scraper API to get the reported user's name (with timeout of 60 seconds)
-        api_url = "https://api.apify.com/v2/acts/argusapi~snapchat-profile-scraper/run-sync-get-dataset-items?token=apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me"
-        response = requests.post(api_url, json={"username": [report_request.reported_username]}, timeout=60)
-        
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
+        # Prepare the Actor input
+        run_input = { "username": [report_request.reported_username] }
 
-        data = response.json()
+        # Run the Actor and wait for it to finish
+        try:
+            run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
+            dataset_id = run["defaultDatasetId"]
 
-        # Assuming the response is a JSON array like in Swift code
-        if isinstance(data, list) and len(data) > 0:
-            first_item = data[0]
-            
-            # Log the full response for debugging
-            print(f"API Response: {data}")
+            # Fetch and iterate through the dataset
+            snapchat_data = None
+            for item in client.dataset(dataset_id).iterate_items():
+                snapchat_data = item
+                break
 
-            # Handle the case where the name is nested within "result"
-            result = first_item.get("result", [])
-            if result and isinstance(result, list) and len(result) > 0:
-                user_info = result[0]  # Access the first item in the result list
-                full_name = user_info.get("name", "")
-            else:
-                full_name = ""
+            if not snapchat_data:
+                raise HTTPException(status_code=500, detail="No data retrieved from Snapchat API")
 
-            if not full_name:
-                first_name, last_name = "", ""  # Handle case where no name is returned
-            else:
-                name_parts = full_name.split(" ")
-                first_name = name_parts[0]  # First name is always present
-                last_name = name_parts[1] if len(name_parts) > 1 else ""  # Handle missing last name
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error retrieving data from Snapchat API: {str(e)}")
+
+        # Extract the name from the Snapchat data
+        full_name = snapchat_data.get("name", "")
+        if not full_name:
+            first_name, last_name = "", ""
         else:
-            raise HTTPException(status_code=500, detail="Unexpected API response format")
+            name_parts = full_name.split(" ")
+            first_name = name_parts[0]
+            last_name = name_parts[1] if len(name_parts) > 1 else ""
 
         # Insert new report into the Reports table and fetch the new Report ID
         report_date = datetime.now()
