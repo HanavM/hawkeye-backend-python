@@ -370,7 +370,23 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
 
         if user_profile and user_profile[0]:
             # Split the previously searched string into an array
-            previously_searched = user_profile[0].split(',')
+            previously_searched_raw = user_profile[0].split(',')
+
+            # Create a list to store previously searched usernames along with their platforms
+            previously_searched = []
+            for search_item in previously_searched_raw:
+                if '|' in search_item:  # Ensure it has both username and platform
+                    username, platform = search_item.split('|')
+                    previously_searched.append({
+                        "username": username,
+                        "platform": platform
+                    })
+                else:
+                    # If the platform isn't present, default to "unknown"
+                    previously_searched.append({
+                        "username": search_item,
+                        "platform": "unknown"
+                    })
         else:
             previously_searched = []
 
@@ -378,6 +394,7 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving previously searched: {str(e)}")
+
 
 
 @app.get("/getReportsByUser", dependencies=[Depends(get_current_user)])
