@@ -270,33 +270,42 @@ def report_user(report_request: ReportRequest, token: str = Depends(oauth2_schem
         traceback.print_exc()  # Log full exception
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
-
-
-
-
-
-
-
-
-@app.get("/getReportsByUsername/{reported_username}", dependencies=[Depends(get_current_user)])
-def get_reports_by_username(reported_username: str, user_email: str = Depends(get_current_user)):
+@app.get("/getReportsByUsername/{platform}/{reported_username}", dependencies=[Depends(get_current_user)])
+def get_reports_by_username(platform: str, reported_username: str, user_email: str = Depends(get_current_user)):
     try:
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Check if the user exists in ReportedUsersSnapchat
-        cursor.execute("SELECT ID FROM ReportedUsersSnapchat WHERE Username = ?", reported_username)
+        # Validate platform input
+        platform = platform.lower()
+        valid_platforms = ["snapchat", "instagram", "tinder"]
+        if platform not in valid_platforms:
+            raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
+
+        # Determine the correct table and foreign key column based on the platform
+        if platform == "snapchat":
+            table_name = "ReportedUsersSnapchat"
+            foreign_key_column = "SnapchatUserID"
+        elif platform == "instagram":
+            table_name = "ReportedUsersInstagram"
+            foreign_key_column = "InstagramUserID"
+        elif platform == "tinder":
+            table_name = "ReportedUsersTinder"
+            foreign_key_column = "TinderUserID"
+
+        # Check if the user exists in the platform-specific table
+        cursor.execute(f"SELECT ID FROM {table_name} WHERE Username = ?", reported_username)
         user_row = cursor.fetchone()
-        
+
         if not user_row:
             return {"message": "User not found"}
 
         user_id = user_row[0]
 
-        # Fetch all Report IDs linked to the user
-        cursor.execute("SELECT ReportID FROM ReportedUsersReports WHERE UserID = ?", user_id)
+        # Fetch all Report IDs linked to the user in the platform-specific foreign key column
+        cursor.execute(f"SELECT ReportID FROM ReportedUsersReports WHERE {foreign_key_column} = ?", user_id)
         report_ids = [row[0] for row in cursor.fetchall()]
-        
+
         if not report_ids:
             return {"message": "No reports found for this user"}
 
@@ -322,15 +331,15 @@ def get_reports_by_username(reported_username: str, user_email: str = Depends(ge
 
         if user_profile and user_profile[0]:
             previously_searched = user_profile[0].split(',')  # Assume it's stored as a comma-separated string
-            # if reported_username not in previously_searched:
             
-            if (reported_username in previously_searched):
+            if reported_username in previously_searched:
                 previously_searched.remove(reported_username)
+            
             # Keep only the last 10 searches
             if len(previously_searched) >= 10:
                 previously_searched = previously_searched[:9]
             
-            previously_searched.insert(0,reported_username)
+            previously_searched.insert(0, reported_username)
 
             updated_searched = ','.join(previously_searched)
         else:
@@ -346,6 +355,7 @@ def get_reports_by_username(reported_username: str, user_email: str = Depends(ge
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 
 @app.get("/getPreviouslySearched", dependencies=[Depends(get_current_user)])
