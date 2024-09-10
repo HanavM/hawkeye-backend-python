@@ -202,14 +202,17 @@ def report_user(report_request: ReportRequest, token: str = Depends(oauth2_schem
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
             last_name_field = "Snapchat_Account_LastName"
+            foreign_key_column = "SnapchatUserID"  # Updated from UserID to SnapchatUserID
         elif platform == "instagram":
             table_name = "ReportedUsersInstagram"
             first_name_field = "Instagram_Account_FirstName"
             last_name_field = "Instagram_Account_LastName"
+            foreign_key_column = "InstagramUserID"
         elif platform == "tinder":
             table_name = "ReportedUsersTinder"
             first_name_field = "Tinder_Account_FirstName"
             last_name_field = "Tinder_Account_LastName"
+            foreign_key_column = "TinderUserID"
 
         # Step 1: Check if the reported username already exists in the platform-specific table
         cursor.execute(f"SELECT ID, Report_Counts, {first_name_field}, {last_name_field} FROM {table_name} WHERE Username = ?", report_request.reported_username)
@@ -256,8 +259,8 @@ def report_user(report_request: ReportRequest, token: str = Depends(oauth2_schem
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 4: Link the report to the user
-        cursor.execute("INSERT INTO ReportedUsersReports (UserID, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
+        # Step 4: Link the report to the user with the correct foreign key column for the platform
+        cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
         return {"message": "Report submitted successfully", "Report ID": report_id}
@@ -266,6 +269,7 @@ def report_user(report_request: ReportRequest, token: str = Depends(oauth2_schem
         import traceback
         traceback.print_exc()  # Log full exception
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
