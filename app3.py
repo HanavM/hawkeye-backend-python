@@ -46,6 +46,7 @@ class ReportRequest(BaseModel):
     reported_username: str
     report_cause: str
     report_description: str
+    platform: str  # Add platform field here
 
 
 # Update the connection string with the new admin username and password
@@ -125,7 +126,7 @@ def register_user(user: User):
     return {"access_token": token, "token_type": "bearer"}
 
 @app.post("/reportUser")
-def report_user(report_request: ReportRequest, platform: str, token: str = Depends(oauth2_scheme)):
+def report_user(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
     try:
         # Extract the reporter's email from the authenticated token
         payload = verify_token(token)
@@ -134,8 +135,9 @@ def report_user(report_request: ReportRequest, platform: str, token: str = Depen
             raise HTTPException(status_code=401, detail="Invalid token")
 
         # Validate platform input
+        platform = report_request.platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
-        if platform.lower() not in valid_platforms:
+        if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
         # Get the reporter's username from the UserProfiles table
@@ -160,7 +162,7 @@ def report_user(report_request: ReportRequest, platform: str, token: str = Depen
         last_name = ""
 
         # Handle Snapchat: Call Snapchat API first to validate the reported username
-        if platform.lower() == "snapchat":
+        if platform == "snapchat":
             run_input = { "username": [report_request.reported_username] }
             try:
                 run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
@@ -196,15 +198,15 @@ def report_user(report_request: ReportRequest, platform: str, token: str = Depen
                 raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
 
         # Determine which table to interact with based on the platform
-        if platform.lower() == "snapchat":
+        if platform == "snapchat":
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
             last_name_field = "Snapchat_Account_LastName"
-        elif platform.lower() == "instagram":
+        elif platform == "instagram":
             table_name = "ReportedUsersInstagram"
             first_name_field = "Instagram_Account_FirstName"
             last_name_field = "Instagram_Account_LastName"
-        elif platform.lower() == "tinder":
+        elif platform == "tinder":
             table_name = "ReportedUsersTinder"
             first_name_field = "Tinder_Account_FirstName"
             last_name_field = "Tinder_Account_LastName"
@@ -218,7 +220,7 @@ def report_user(report_request: ReportRequest, platform: str, token: str = Depen
             user_id, report_counts, db_first_name, db_last_name = existing_user
 
             # If the user doesn't have a name in the database and the platform is Snapchat, update it
-            if platform.lower() == "snapchat" and (not db_first_name or not db_last_name):
+            if platform == "snapchat" and (not db_first_name or not db_last_name):
                 cursor.execute(f"""
                     UPDATE {table_name}
                     SET {first_name_field} = ?, {last_name_field} = ?
