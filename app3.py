@@ -331,20 +331,23 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
         if user_profile and user_profile[0]:
             previously_searched = user_profile[0].split(',')  # Assume it's stored as a comma-separated string
-            
-            if reported_username in previously_searched:
-                previously_searched.remove(reported_username)
-            
+
+            # Check if the username|platform combo already exists
+            search_entry = f"{reported_username}|{platform}"
+            if search_entry in previously_searched:
+                previously_searched.remove(search_entry)
+
             # Keep only the last 10 searches
             if len(previously_searched) >= 10:
                 previously_searched = previously_searched[:9]
             
-            previously_searched.insert(0, reported_username)
+            # Add the new search entry
+            previously_searched.insert(0, search_entry)
 
             updated_searched = ','.join(previously_searched)
         else:
             # If the user hasn't searched before, start with the current search
-            updated_searched = reported_username
+            updated_searched = f"{reported_username}|{platform}"
 
         # Update the Previously_Searched field in the database
         cursor.execute("UPDATE UserProfiles SET Previously_Searched = ? WHERE Email = ?", updated_searched, user_email)
@@ -355,6 +358,7 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 
 
@@ -376,19 +380,19 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
             previously_searched = []
 
             for search_item in previously_searched_raw:
-                # Fetch the platform for each previously searched username from the Reports table
-                cursor.execute("SELECT TOP 1 Platform FROM Reports WHERE Reported_Username = ?", search_item)
-                report_row = cursor.fetchone()
-
-                if report_row:
-                    platform = report_row[0]  # Get platform from Reports table
+                # Check if the stored value contains both the username and the platform
+                if '|' in search_item:
+                    username, platform = search_item.split('|')
+                    previously_searched.append({
+                        "username": username,
+                        "platform": platform
+                    })
                 else:
-                    platform = "unknown"
-
-                previously_searched.append({
-                    "username": search_item,
-                    "platform": platform
-                })
+                    # If the platform is missing (for older entries), default to "unknown"
+                    previously_searched.append({
+                        "username": search_item,
+                        "platform": "unknown"
+                    })
         else:
             previously_searched = []
 
@@ -396,6 +400,7 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving previously searched: {str(e)}")
+
 
 
 
