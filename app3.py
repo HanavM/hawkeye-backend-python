@@ -447,14 +447,35 @@ def get_reports_by_user(user_email: str = Depends(get_current_user)):
 
 
 
-@app.get("/searchUsersByPrefix/{prefix}")
-def search_users_by_prefix(prefix: str):
+@app.get("/searchUsersByPrefix/{platform}/{prefix}")
+def search_users_by_prefix(platform: str, prefix: str):
     try:
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Query to find all users whose Username starts with the prefix
-        cursor.execute("SELECT * FROM ReportedUsersSnapchat WHERE Username LIKE ?", prefix + '%')
+        # Validate platform input
+        platform = platform.lower()
+        valid_platforms = ["snapchat", "instagram", "tinder"]
+        if platform not in valid_platforms:
+            raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
+
+        # Determine the correct table and columns based on the platform
+        if platform == "snapchat":
+            table_name = "ReportedUsersSnapchat"
+            first_name_field = "Snapchat_Account_FirstName"
+            last_name_field = "Snapchat_Account_LastName"
+        elif platform == "instagram":
+            table_name = "ReportedUsersInstagram"
+            first_name_field = "Instagram_Account_FirstName"
+            last_name_field = "Instagram_Account_LastName"
+        elif platform == "tinder":
+            table_name = "ReportedUsersTinder"
+            first_name_field = "Tinder_Account_FirstName"
+            last_name_field = "Tinder_Account_LastName"
+
+        # Query to find all users whose Username starts with the prefix for the specified platform
+        query = f"SELECT * FROM {table_name} WHERE Username LIKE ?"
+        cursor.execute(query, prefix + '%')
         users = cursor.fetchall()
 
         if not users:
@@ -466,8 +487,8 @@ def search_users_by_prefix(prefix: str):
             users_data.append({
                 "ID": user.ID,
                 "Username": user.Username,
-                "Snapchat_Account_FirstName": user.Snapchat_Account_FirstName,
-                "Snapchat_Account_LastName": user.Snapchat_Account_LastName,
+                first_name_field: getattr(user, first_name_field),
+                last_name_field: getattr(user, last_name_field),
                 "Report_Counts": user.Report_Counts
             })
 
@@ -475,6 +496,7 @@ def search_users_by_prefix(prefix: str):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving users: {str(e)}")
+
 
 
 @app.post("/login", response_model=Token)
