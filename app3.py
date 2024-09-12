@@ -568,7 +568,76 @@ def set_user_profile(user_profile: UserProfileRequest):
         traceback.print_exc()  # Log the full traceback for better error visibility
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
 
+# Route to set connected Snapchat username
+@app.post("/setConnectedSnapchat", dependencies=[Depends(oauth2_scheme)])
+def set_connected_snapchat(username: str, token: str = Depends(oauth2_scheme)):
+    try:
+        # Extract the reporter's email from the authenticated token
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
 
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Update the Snapchat username in UserProfiles
+        cursor.execute("UPDATE UserProfiles SET SnapchatUsername = ? WHERE Email = ?", username, email)
+        conn.commit()
+
+        return {"message": "Snapchat username updated successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating Snapchat username: {str(e)}")
+
+
+# Route to set connected Instagram username
+@app.post("/setConnectedInstagram", dependencies=[Depends(oauth2_scheme)])
+def set_connected_instagram(username: str, token: str = Depends(oauth2_scheme)):
+    try:
+        # Extract the reporter's email from the authenticated token
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Update the Instagram username in UserProfiles
+        cursor.execute("UPDATE UserProfiles SET InstagramUsername = ? WHERE Email = ?", username, email)
+        conn.commit()
+
+        return {"message": "Instagram username updated successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating Instagram username: {str(e)}")
+
+
+# Route to set connected Tinder username
+@app.post("/setConnectedTinder", dependencies=[Depends(oauth2_scheme)])
+def set_connected_tinder(username: str, token: str = Depends(oauth2_scheme)):
+    try:
+        # Extract the reporter's email from the authenticated token
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Update the Tinder username in UserProfiles
+        cursor.execute("UPDATE UserProfiles SET TinderUsername = ? WHERE Email = ?", username, email)
+        conn.commit()
+
+        return {"message": "Tinder username updated successfully"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error updating Tinder username: {str(e)}")
 
 
 
