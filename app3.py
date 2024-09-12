@@ -542,7 +542,7 @@ def set_user_profile(user_profile: UserProfileRequest):
         # Insert or update the profile information, including is_premium and initializing searched_count to 0
         cursor.execute("""
             MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium, SearchedCount)
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, SearchedCount)
             ON target.Email = source.Email
             WHEN MATCHED THEN 
                 UPDATE SET 
@@ -552,10 +552,10 @@ def set_user_profile(user_profile: UserProfileRequest):
                     SnapchatUsername = source.SnapchatUsername, 
                     InstagramUsername = source.InstagramUsername, 
                     TinderUsername = source.TinderUsername,
-                    IsPremium = source.IsPremium
+                    is_premium = source.is_premium
             WHEN NOT MATCHED THEN
-                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium, SearchedCount)
-                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.IsPremium, 0);  -- Initialize searched_count to 0
+                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, SearchedCount)
+                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0);  -- Initialize searched_count to 0
         """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, 0))
         
         conn.commit()
