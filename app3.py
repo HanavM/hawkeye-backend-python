@@ -568,7 +568,11 @@ def set_user_profile(user_profile: UserProfileRequest):
         traceback.print_exc()  # Log the full traceback for better error visibility
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
 
-# Route to set connected Snapchat username
+
+
+
+
+# Set connected social media accounts
 @app.post("/setConnectedSnapchat", dependencies=[Depends(oauth2_scheme)])
 def set_connected_snapchat(username: str, token: str = Depends(oauth2_scheme)):
     try:
@@ -592,7 +596,6 @@ def set_connected_snapchat(username: str, token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=400, detail=f"Error updating Snapchat username: {str(e)}")
 
 
-# Route to set connected Instagram username
 @app.post("/setConnectedInstagram", dependencies=[Depends(oauth2_scheme)])
 def set_connected_instagram(username: str, token: str = Depends(oauth2_scheme)):
     try:
@@ -616,7 +619,6 @@ def set_connected_instagram(username: str, token: str = Depends(oauth2_scheme)):
         raise HTTPException(status_code=400, detail=f"Error updating Instagram username: {str(e)}")
 
 
-# Route to set connected Tinder username
 @app.post("/setConnectedTinder", dependencies=[Depends(oauth2_scheme)])
 def set_connected_tinder(username: str, token: str = Depends(oauth2_scheme)):
     try:
@@ -638,6 +640,113 @@ def set_connected_tinder(username: str, token: str = Depends(oauth2_scheme)):
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error updating Tinder username: {str(e)}")
+
+# Get connected social media accounts report counts
+@app.get("/getConnectedSnapchat", dependencies=[Depends(oauth2_scheme)])
+def get_connected_snapchat(token: str = Depends(oauth2_scheme)):
+    try:
+        # Extract the user's email from the authenticated token
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Fetch the connected Snapchat username from UserProfiles
+        cursor.execute("SELECT SnapchatUsername FROM UserProfiles WHERE Email = ?", email)
+        user_profile = cursor.fetchone()
+
+        if not user_profile or not user_profile[0]:
+            raise HTTPException(status_code=404, detail="Snapchat username not found for the user.")
+
+        snapchat_username = user_profile[0]
+
+        # Fetch the number of reports for this Snapchat username
+        cursor.execute("SELECT Report_Counts FROM ReportedUsersSnapchat WHERE Username = ?", snapchat_username)
+        report_row = cursor.fetchone()
+
+        if not report_row:
+            return {"message": "Snapchat username has no reports.", "report_count": 0}
+
+        report_count = report_row[0]
+        return {"message": f"Snapchat username '{snapchat_username}' has {report_count} reports.", "report_count": report_count}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving Snapchat report count: {str(e)}")
+
+@app.get("/getConnectedInstagram", dependencies=[Depends(oauth2_scheme)])
+def get_connected_instagram(token: str = Depends(oauth2_scheme)):
+    try:
+        # Extract the user's email from the authenticated token
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Fetch the connected Instagram username from UserProfiles
+        cursor.execute("SELECT InstagramUsername FROM UserProfiles WHERE Email = ?", email)
+        user_profile = cursor.fetchone()
+
+        if not user_profile or not user_profile[0]:
+            raise HTTPException(status_code=404, detail="Instagram username not found for the user.")
+
+        instagram_username = user_profile[0]
+
+        # Fetch the number of reports for this Instagram username
+        cursor.execute("SELECT Report_Counts FROM ReportedUsersInstagram WHERE Username = ?", instagram_username)
+        report_row = cursor.fetchone()
+
+        if not report_row:
+            return {"message": "Instagram username has no reports.", "report_count": 0}
+
+        report_count = report_row[0]
+        return {"message": f"Instagram username '{instagram_username}' has {report_count} reports.", "report_count": report_count}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving Instagram report count: {str(e)}")
+
+@app.get("/getConnectedTinder", dependencies=[Depends(oauth2_scheme)])
+def get_connected_tinder(token: str = Depends(oauth2_scheme)):
+    try:
+        # Extract the user's email from the authenticated token
+        payload = verify_token(token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Fetch the connected Tinder username from UserProfiles
+        cursor.execute("SELECT TinderUsername FROM UserProfiles WHERE Email = ?", email)
+        user_profile = cursor.fetchone()
+
+        if not user_profile or not user_profile[0]:
+            raise HTTPException(status_code=404, detail="Tinder username not found for the user.")
+
+        tinder_username = user_profile[0]
+
+        # Fetch the number of reports for this Tinder username
+        cursor.execute("SELECT Report_Counts FROM ReportedUsersTinder WHERE Username = ?", tinder_username)
+        report_row = cursor.fetchone()
+
+        if not report_row:
+            return {"message": "Tinder username has no reports.", "report_count": 0}
+
+        report_count = report_row[0]
+        return {"message": f"Tinder username '{tinder_username}' has {report_count} reports.", "report_count": report_count}
+    
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error retrieving Tinder report count: {str(e)}")
+
 
 
 
