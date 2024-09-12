@@ -37,10 +37,12 @@ class UserProfile(BaseModel):
     snapchat_username: Union[str, None] = None
     instagram_username: Union[str, None] = None
     tinder_username: Union[str, None] = None
+    is_premium: bool = False  # Add is_premium field
 
 class UserProfileRequest(BaseModel):
     user: User
     profile: UserProfile
+
 
 class ReportRequest(BaseModel):
     reported_username: str
@@ -498,7 +500,6 @@ def search_users_by_prefix(platform: str, prefix: str):
         raise HTTPException(status_code=400, detail=f"Error retrieving users: {str(e)}")
 
 
-
 @app.post("/login", response_model=Token)
 def login_user(user: User):
     try:
@@ -530,29 +531,31 @@ def set_user_profile(user_profile: UserProfileRequest):
         if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Insert or update the profile information
+        # Insert or update the profile information, including is_premium
         cursor.execute("""
-    MERGE INTO UserProfiles AS target
-    USING (VALUES (?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
-    ON target.Email = source.Email
-    WHEN MATCHED THEN 
-        UPDATE SET 
-            Username = source.Username, 
-            Age = source.Age, 
-            State = source.State, 
-            SnapchatUsername = source.SnapchatUsername, 
-            InstagramUsername = source.InstagramUsername, 
-            TinderUsername = source.TinderUsername
-    WHEN NOT MATCHED THEN
-        INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername)
-        VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername);
-""", (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username))
+            MERGE INTO UserProfiles AS target
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium)
+            ON target.Email = source.Email
+            WHEN MATCHED THEN 
+                UPDATE SET 
+                    Username = source.Username, 
+                    Age = source.Age, 
+                    State = source.State, 
+                    SnapchatUsername = source.SnapchatUsername, 
+                    InstagramUsername = source.InstagramUsername, 
+                    TinderUsername = source.TinderUsername,
+                    IsPremium = source.IsPremium
+            WHEN NOT MATCHED THEN
+                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium)
+                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.IsPremium);
+        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium))
         
         conn.commit()
         return {"message": "Profile updated successfully"}
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 
 
