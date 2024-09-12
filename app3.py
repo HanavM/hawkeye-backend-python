@@ -328,7 +328,7 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             })
 
         # Fetch the user's profile to update the Previously_Searched field and increment searched_count
-        cursor.execute("SELECT Previously_Searched, SearchedCount FROM UserProfiles WHERE Email = ?", user_email)
+        cursor.execute("SELECT Previously_Searched, searched_count FROM UserProfiles WHERE Email = ?", user_email)
         user_profile = cursor.fetchone()
 
         if user_profile:
@@ -351,15 +351,15 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             # Increment searched_count by 1
             searched_count = user_profile[1] + 1
 
-            # Update the Previously_Searched and SearchedCount fields in the database
-            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, SearchedCount = ? WHERE Email = ?", updated_searched, searched_count, user_email)
+            # Update the Previously_Searched and searched_count fields in the database
+            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
         else:
             # If the user hasn't searched before, start with the current search and set the searched_count to 1
             updated_searched = f"{reported_username}|{platform}"
             searched_count = 1
 
-            # Update the Previously_Searched and SearchedCount fields in the database
-            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, SearchedCount = ? WHERE Email = ?", updated_searched, searched_count, user_email)
+            # Update the Previously_Searched and searched_count fields in the database
+            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
 
         conn.commit()
 
@@ -542,7 +542,7 @@ def set_user_profile(user_profile: UserProfileRequest):
         # Insert or update the profile information, including is_premium and initializing searched_count to 0
         cursor.execute("""
             MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, SearchedCount)
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
             ON target.Email = source.Email
             WHEN MATCHED THEN 
                 UPDATE SET 
@@ -554,7 +554,7 @@ def set_user_profile(user_profile: UserProfileRequest):
                     TinderUsername = source.TinderUsername,
                     is_premium = source.is_premium
             WHEN NOT MATCHED THEN
-                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, SearchedCount)
+                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
                 VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0);  -- Initialize searched_count to 0
         """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, 0))
         
