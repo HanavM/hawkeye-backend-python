@@ -348,8 +348,9 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
             updated_searched = ','.join(previously_searched)
 
-            # Increment searched_count by 1
-            searched_count = user_profile[1] + 1
+            # Check if searched_count is None and set it to 0 if necessary
+            searched_count = user_profile[1] if user_profile[1] is not None else 0
+            searched_count += 1
 
             # Update the Previously_Searched and searched_count fields in the database
             cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
@@ -367,6 +368,7 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 
 
