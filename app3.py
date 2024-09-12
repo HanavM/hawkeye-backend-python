@@ -562,7 +562,10 @@ def set_user_profile(user_profile: UserProfileRequest):
         return {"message": "Profile updated successfully"}
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # Log the full traceback for better error visibility
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 
 
