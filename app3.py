@@ -327,12 +327,12 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
                 "Report_Description": report.Report_Description
             })
 
-        # Fetch the user's profile to update the Previously_Searched field
-        cursor.execute("SELECT Previously_Searched FROM UserProfiles WHERE Email = ?", user_email)
+        # Fetch the user's profile to update the Previously_Searched field and increment searched_count
+        cursor.execute("SELECT Previously_Searched, SearchedCount FROM UserProfiles WHERE Email = ?", user_email)
         user_profile = cursor.fetchone()
 
-        if user_profile and user_profile[0]:
-            previously_searched = user_profile[0].split(',')  # Assume it's stored as a comma-separated string
+        if user_profile:
+            previously_searched = user_profile[0].split(',') if user_profile[0] else []
 
             # Check if the username|platform combo already exists
             search_entry = f"{reported_username}|{platform}"
@@ -347,12 +347,19 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             previously_searched.insert(0, search_entry)
 
             updated_searched = ','.join(previously_searched)
-        else:
-            # If the user hasn't searched before, start with the current search
-            updated_searched = f"{reported_username}|{platform}"
 
-        # Update the Previously_Searched field in the database
-        cursor.execute("UPDATE UserProfiles SET Previously_Searched = ? WHERE Email = ?", updated_searched, user_email)
+            # Increment searched_count by 1
+            searched_count = user_profile[1] + 1
+
+            # Update the Previously_Searched and SearchedCount fields in the database
+            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, SearchedCount = ? WHERE Email = ?", updated_searched, searched_count, user_email)
+        else:
+            # If the user hasn't searched before, start with the current search and set the searched_count to 1
+            updated_searched = f"{reported_username}|{platform}"
+            searched_count = 1
+
+            # Update the Previously_Searched and SearchedCount fields in the database
+            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, SearchedCount = ? WHERE Email = ?", updated_searched, searched_count, user_email)
 
         conn.commit()
 
@@ -360,6 +367,7 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 
 @app.get("/getPreviouslySearched", dependencies=[Depends(get_current_user)])
@@ -531,10 +539,10 @@ def set_user_profile(user_profile: UserProfileRequest):
         if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Insert or update the profile information, including is_premium
+        # Insert or update the profile information, including is_premium and initializing searched_count to 0
         cursor.execute("""
             MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium)
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium, SearchedCount)
             ON target.Email = source.Email
             WHEN MATCHED THEN 
                 UPDATE SET 
@@ -546,15 +554,16 @@ def set_user_profile(user_profile: UserProfileRequest):
                     TinderUsername = source.TinderUsername,
                     IsPremium = source.IsPremium
             WHEN NOT MATCHED THEN
-                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium)
-                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.IsPremium);
-        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium))
+                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, IsPremium, SearchedCount)
+                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.IsPremium, 0);  -- Initialize searched_count to 0
+        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, 0))
         
         conn.commit()
         return {"message": "Profile updated successfully"}
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 
 
