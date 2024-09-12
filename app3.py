@@ -360,8 +360,6 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
 
 
-
-
 @app.get("/getPreviouslySearched", dependencies=[Depends(get_current_user)])
 def get_previously_searched(user_email: str = Depends(get_current_user)):
     try:
@@ -403,8 +401,6 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
 
 
 
-
-
 @app.get("/getReportsByUser", dependencies=[Depends(get_current_user)])
 def get_reports_by_user(user_email: str = Depends(get_current_user)):
     try:
@@ -427,7 +423,7 @@ def get_reports_by_user(user_email: str = Depends(get_current_user)):
         if not report_ids:
             return {"message": "No reports found for this user"}
 
-        # Fetch all the reports using the report IDs
+        # Fetch all the reports using the report IDs, along with the platform field
         cursor.execute(f"SELECT * FROM Reports WHERE ID IN ({','.join('?' * len(report_ids))})", report_ids)
         reports = cursor.fetchall()
 
@@ -440,13 +436,15 @@ def get_reports_by_user(user_email: str = Depends(get_current_user)):
                 "Reporter_Username": report.Reporter_Username,
                 "Report_Cause": report.Report_Cause,
                 "Report_Date": report.Report_Date,
-                "Report_Description": report.Report_Description
+                "Report_Description": report.Report_Description,
+                "Platform": report.Platform  # Adding platform to the response
             })
 
         return {"reports": reports_data}
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 
 @app.get("/searchUsersByPrefix/{prefix}")
