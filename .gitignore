@@ -24,3 +24,4 @@ venv/
 
 # Windows specific files
 Thumbs.db
+.history/
