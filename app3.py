@@ -5,14 +5,27 @@ import bcrypt
 from datetime import datetime, timedelta
 from typing import Union
 from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import Form
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 import requests
 from apify_client import ApifyClient
+import json
+import cv2
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from azure.storage.blob import BlobServiceClient, ContentSettings
 
 # JWT Secret Key
 SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
 ALGORITHM = "HS256"
+
+connection_string_blob = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+container_name = "reports-to-be-validated"
+subscription_key = os.getenv("AZURE_SUBSCRIPTION_KEY")
+ocr_endpoint = "https://hawkeye-cv-test2-hanavmodasiya.cognitiveservices.azure.com/vision/v3.2/ocr"
+frame_output_dir = "frames"
+
+blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
 
 client = ApifyClient("apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me")
 
@@ -50,7 +63,7 @@ class ReportRequest(BaseModel):
     report_description: str
     platform: str  # Add platform field here
 
-
+#edf
 # Update the connection string with the new admin username and password
 connection_string = (
     "Driver={ODBC Driver 18 for SQL Server};"
@@ -113,6 +126,66 @@ def root():
     return {"message": "Person API root"}
 
 
+
+#User authentication routes
+@app.post("/login", response_model=Token)
+def login_user(user: User):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT HashedPassword FROM Users WHERE Email = ?", user.email)
+        db_user = cursor.fetchone()
+        if not db_user or not bcrypt.checkpw(user.password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error logging in: {str(e)}")
+
+    token = create_access_token(data={"sub": user.email})
+    return {"access_token": token, "token_type": "bearer"}
+
+@app.post("/set-profile")
+def set_user_profile(user_profile: UserProfileRequest):
+    try:
+        email = user_profile.user.email
+        password = user_profile.user.password
+        profile_data = user_profile.profile
+        
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Ensure the user exists before setting profile
+        cursor.execute("SELECT * FROM Users WHERE Email = ?", email)
+        db_user = cursor.fetchone()
+        if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        # Insert or update the profile information, including is_premium and initializing searched_count to 0
+        cursor.execute("""
+            MERGE INTO UserProfiles AS target
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
+            ON target.Email = source.Email
+            WHEN MATCHED THEN 
+                UPDATE SET 
+                    Username = source.Username, 
+                    Age = source.Age, 
+                    State = source.State, 
+                    SnapchatUsername = source.SnapchatUsername, 
+                    InstagramUsername = source.InstagramUsername, 
+                    TinderUsername = source.TinderUsername,
+                    is_premium = source.is_premium
+            WHEN NOT MATCHED THEN
+                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
+                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0);  -- Initialize searched_count to 0
+        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, 0))
+        
+        conn.commit()
+        return {"message": "Profile updated successfully"}
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # Log the full traceback for better error visibility
+        raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 @app.post("/register", response_model=Token)
 def register_user(user: User):
     hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt())
@@ -127,8 +200,93 @@ def register_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
+
+
+
+#Reporting routes
 @app.post("/reportUser")
-def report_user(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
+async def report_user(
+    reported_username: str = Form(...),
+    report_cause: str = Form(...),
+    report_description: str = Form(...),
+    platform: str = Form(...),
+    video: UploadFile = File(...),
+    token: str = Depends(oauth2_scheme)
+):
+    try:
+        # Validate platform input
+        platform = platform.lower()
+        valid_platforms = ["snapchat", "instagram", "tinder"]
+        if platform not in valid_platforms:
+            raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
+
+        # Handle Snapchat API validation
+        first_name = ""
+        last_name = ""
+        if platform == "snapchat":
+            run_input = { "username": [reported_username] }
+            try:
+                # Call the Snapchat scraping API
+                run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
+                dataset_id = run["defaultDatasetId"]
+                dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
+
+                if not dataset_items:
+                    raise Exception("No data retrieved from Snapchat API")
+
+                first_item = dataset_items[0] if dataset_items else None
+                if first_item and 'result' in first_item:
+                    result = first_item['result'][0]
+
+                    # Handle case where the Snapchat account does not exist
+                    if result.get("accountType", "") == "no_exist_or_banned":
+                        return {"message": "This account does not exist, the report was not submitted."}
+
+                    full_name = result.get('name', '')
+                    if full_name:
+                        name_parts = full_name.split(" ")
+                        first_name = name_parts[0]
+                        last_name = name_parts[1] if len(name_parts) > 1 else ""
+                    else:
+                        first_name, last_name = "", ""
+
+            except Exception as e:
+                print(f"Error retrieving data from Snapchat API: {str(e)}")
+                raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
+
+        # Step 1: Save the video locally and process it
+        video_path = f"temp_videos/{reported_username}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
+        with open(video_path, "wb") as f:
+            f.write(await video.read())
+
+        # Step 2: Extract text from the video frames
+        extracted_text = process_video(video_path, frame_interval=120)
+
+        # Step 3: Prepare report data
+        report_data = {
+            "reported_username": reported_username,
+            "report_cause": report_cause,
+            "report_description": report_description,
+            "report_date": str(datetime.now()),
+            "platform": platform.capitalize(),
+            "extracted_text": extracted_text
+        }
+
+        # Step 4: Upload report data and video to Azure Blob Storage
+        with open(video_path, "rb") as video_file:
+            upload_report_to_blob(report_data, video_file)
+
+        # Clean up: Remove the local video file after upload
+        if os.path.exists(video_path):
+            os.remove(video_path)
+
+        return {"message": "Report has been submitted for validation"}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
+@app.post("/reportUserAdmin")
+def report_user_admin(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
     try:
         # Extract the reporter's email from the authenticated token
         payload = verify_token(token)
@@ -272,6 +430,10 @@ def report_user(report_request: ReportRequest, token: str = Depends(oauth2_schem
         traceback.print_exc()  # Log full exception
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
+
+
+
+#Searching routes
 @app.get("/getReportsByUsername/{platform}/{reported_username}", dependencies=[Depends(get_current_user)])
 def get_reports_by_username(platform: str, reported_username: str, user_email: str = Depends(get_current_user)):
     try:
@@ -369,9 +531,6 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
 
-
-
-
 @app.get("/getPreviouslySearched", dependencies=[Depends(get_current_user)])
 def get_previously_searched(user_email: str = Depends(get_current_user)):
     try:
@@ -410,8 +569,6 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving previously searched: {str(e)}")
-
-
 
 @app.get("/getReportsByUser", dependencies=[Depends(get_current_user)])
 def get_reports_by_user(user_email: str = Depends(get_current_user)):
@@ -456,8 +613,6 @@ def get_reports_by_user(user_email: str = Depends(get_current_user)):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
-
-
 
 @app.get("/searchUsersByPrefix/{platform}/{prefix}")
 def search_users_by_prefix(platform: str, prefix: str):
@@ -508,65 +663,6 @@ def search_users_by_prefix(platform: str, prefix: str):
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving users: {str(e)}")
-
-
-@app.post("/login", response_model=Token)
-def login_user(user: User):
-    try:
-        conn = get_conn()
-        cursor = conn.cursor()
-        cursor.execute("SELECT HashedPassword FROM Users WHERE Email = ?", user.email)
-        db_user = cursor.fetchone()
-        if not db_user or not bcrypt.checkpw(user.password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error logging in: {str(e)}")
-
-    token = create_access_token(data={"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
-
-@app.post("/set-profile")
-def set_user_profile(user_profile: UserProfileRequest):
-    try:
-        email = user_profile.user.email
-        password = user_profile.user.password
-        profile_data = user_profile.profile
-        
-        conn = get_conn()
-        cursor = conn.cursor()
-
-        # Ensure the user exists before setting profile
-        cursor.execute("SELECT * FROM Users WHERE Email = ?", email)
-        db_user = cursor.fetchone()
-        if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
-            raise HTTPException(status_code=401, detail="Invalid credentials")
-
-        # Insert or update the profile information, including is_premium and initializing searched_count to 0
-        cursor.execute("""
-            MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
-            ON target.Email = source.Email
-            WHEN MATCHED THEN 
-                UPDATE SET 
-                    Username = source.Username, 
-                    Age = source.Age, 
-                    State = source.State, 
-                    SnapchatUsername = source.SnapchatUsername, 
-                    InstagramUsername = source.InstagramUsername, 
-                    TinderUsername = source.TinderUsername,
-                    is_premium = source.is_premium
-            WHEN NOT MATCHED THEN
-                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
-                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0);  -- Initialize searched_count to 0
-        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, 0))
-        
-        conn.commit()
-        return {"message": "Profile updated successfully"}
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()  # Log the full traceback for better error visibility
-        raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
 
 
 
@@ -746,6 +842,92 @@ def get_connected_tinder(token: str = Depends(oauth2_scheme)):
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving Tinder report count: {str(e)}")
+
+
+# Helper functions for processing and uploading reports
+def extract_text_from_image(image_data):
+    try:
+        headers = {
+            'Ocp-Apim-Subscription-Key': subscription_key,
+            'Content-Type': 'application/octet-stream'
+        }
+        params = {'language': 'en', 'detectOrientation': 'true'}
+        response = requests.post(ocr_endpoint, headers=headers, params=params, data=image_data)
+
+        if response.status_code != 200:
+            print(f"Error: {response.status_code} - {response.text}")
+            return None
+
+        ocr_result = response.json()
+        extracted_text = []
+        for region in ocr_result.get('regions', []):
+            for line in region['lines']:
+                line_text = ' '.join([word['text'] for word in line['words']])
+                extracted_text.append(line_text)
+
+        return " ".join(extracted_text)
+
+    except Exception as e:
+        print(f"Error extracting text from image: {str(e)}")
+        return None
+
+def process_video(video_path, frame_interval=120):
+    try:
+        if not os.path.exists(frame_output_dir):
+            os.makedirs(frame_output_dir)
+
+        video_capture = cv2.VideoCapture(video_path)
+        frame_count = 0
+        success = True
+        extracted_texts = []
+
+        while success:
+            success, frame = video_capture.read()
+
+            if success and frame_count % frame_interval == 0:
+                frame_filename = f"{frame_output_dir}/frame_{frame_count}.jpg"
+                cv2.imwrite(frame_filename, frame)
+
+                with open(frame_filename, "rb") as frame_file:
+                    image_data = frame_file.read()
+
+                text = extract_text_from_image(image_data)
+                if text:
+                    extracted_texts.append({"frame": frame_count, "text": text})
+
+            frame_count += 1
+
+        video_capture.release()
+
+        return extracted_texts
+
+    except Exception as e:
+        print(f"Error processing video: {str(e)}")
+        return None
+
+def upload_report_to_blob(report_data, video_file):
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        folder_name = f"{report_data['reported_username']}_{timestamp}"
+
+        # Upload metadata (JSON)
+        metadata_filename = f"{folder_name}/metadata.json"
+        metadata_blob = blob_service_client.get_blob_client(container=container_name, blob=metadata_filename)
+        metadata_json = json.dumps(report_data, indent=4)
+        metadata_blob.upload_blob(metadata_json, overwrite=True, content_settings=ContentSettings(content_type="application/json"))
+        print(f"Metadata uploaded: {metadata_filename}")
+
+        # Upload the video file
+        video_filename = f"{folder_name}/video.mp4"
+        video_blob = blob_service_client.get_blob_client(container=container_name, blob=video_filename)
+        video_blob.upload_blob(video_file, overwrite=True, content_settings=ContentSettings(content_type="video/mp4"))
+        print(f"Video uploaded: {video_filename}")
+
+        print("Report uploaded successfully!")
+
+    except Exception as e:
+        print(f"Error uploading report: {str(e)}")
+
 
 
 
