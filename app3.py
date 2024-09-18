@@ -254,15 +254,20 @@ async def report_user(
                 print(f"Error retrieving data from Snapchat API: {str(e)}")
                 raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
 
-        # Step 1: Save the video locally and process it
-        video_path = f"temp_videos/{reported_username}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
+        # Step 1: Ensure the directory exists
+        video_dir = "temp_videos"
+        if not os.path.exists(video_dir):
+            os.makedirs(video_dir)  # Create the directory if it doesn't exist
+
+        # Step 2: Save the video locally and process it
+        video_path = f"{video_dir}/{reported_username}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
         with open(video_path, "wb") as f:
             f.write(await video.read())
 
-        # Step 2: Extract text from the video frames
+        # Step 3: Extract text from the video frames
         extracted_text = process_video(video_path, frame_interval=120)
 
-        # Step 3: Prepare report data
+        # Step 4: Prepare report data
         report_data = {
             "reported_username": reported_username,
             "report_cause": report_cause,
@@ -272,7 +277,7 @@ async def report_user(
             "extracted_text": extracted_text
         }
 
-        # Step 4: Upload report data and video to Azure Blob Storage
+        # Step 5: Upload report data and video to Azure Blob Storage
         with open(video_path, "rb") as video_file:
             upload_report_to_blob(report_data, video_file)
 
