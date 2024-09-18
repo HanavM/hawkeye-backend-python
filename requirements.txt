@@ -35,5 +35,4 @@ azure-storage-blob==12.14.1
 opencv-python-headless==4.8.0.74
 numpy<2
 gunicorn==20.1.0
-libgl1-mesa-glx==1.0.0
-python-multipart==0.0.5  # Newly added to handle multipart forms
+python-multipart==0.0.5
