@@ -34,4 +34,5 @@ apify-client==1.3.0
 azure-storage-blob==12.14.1
 opencv-python-headless==4.8.0.74
 numpy<2
-
+gunicorn==20.1.0
+libgl1-mesa-glx==1.0.0  # Required to address OpenCV issues
