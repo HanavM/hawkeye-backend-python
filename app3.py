@@ -214,21 +214,35 @@ async def report_user(
     token: str = Depends(oauth2_scheme)
 ):
     try:
-        # Validate platform input
+        # Step 1: Extract the reporter's email from the authenticated token
+        payload = verify_token(token)  # Verify and decode the JWT token
+        reporter_email = payload.get("sub")  # Extract the email (subject)
+        if not reporter_email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Step 2: Fetch the reporter's username from the UserProfiles table based on the email
+        conn = get_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT Username FROM UserProfiles WHERE Email = ?", (reporter_email,))
+        reporter_row = cursor.fetchone()
+        if not reporter_row:
+            raise HTTPException(status_code=404, detail="Reporter not found")
+
+        reporter_username = reporter_row[0]  # Get the reporter's username
+
+        # Step 3: Validate platform input
         platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
-        # Handle Snapchat API validation
+        # Step 4: Handle Snapchat API validation
         first_name = ""
         last_name = ""
         if platform == "snapchat":
-            run_input = { "username": [reported_username] }
+            run_input = {"username": [reported_username]}
             try:
-                # Call the Snapchat scraping API
                 run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
-                dataset_id = run["defaultDatasetId"]
                 dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
 
                 if not dataset_items:
@@ -237,8 +251,6 @@ async def report_user(
                 first_item = dataset_items[0] if dataset_items else None
                 if first_item and 'result' in first_item:
                     result = first_item['result'][0]
-
-                    # Handle case where the Snapchat account does not exist
                     if result.get("accountType", "") == "no_exist_or_banned":
                         return {"message": "This account does not exist, the report was not submitted."}
 
@@ -247,37 +259,36 @@ async def report_user(
                         name_parts = full_name.split(" ")
                         first_name = name_parts[0]
                         last_name = name_parts[1] if len(name_parts) > 1 else ""
-                    else:
-                        first_name, last_name = "", ""
 
             except Exception as e:
                 print(f"Error retrieving data from Snapchat API: {str(e)}")
                 raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
 
-        # Step 1: Ensure the directory exists
+        # Step 5: Ensure the directory for video files exists
         video_dir = "temp_videos"
         if not os.path.exists(video_dir):
-            os.makedirs(video_dir)  # Create the directory if it doesn't exist
+            os.makedirs(video_dir)
 
-        # Step 2: Save the video locally and process it
+        # Step 6: Save the video locally
         video_path = f"{video_dir}/{reported_username}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
         with open(video_path, "wb") as f:
             f.write(await video.read())
 
-        # Step 3: Extract text from the video frames
+        # Step 7: Extract text from the video frames
         extracted_text = process_video(video_path, frame_interval=120)
 
-        # Step 4: Prepare report data
+        # Step 8: Prepare the report data (including reporter_username)
         report_data = {
             "reported_username": reported_username,
             "report_cause": report_cause,
             "report_description": report_description,
             "report_date": str(datetime.now()),
             "platform": platform.capitalize(),
-            "extracted_text": extracted_text
+            "extracted_text": extracted_text,
+            "reporter_username": reporter_username  # Add reporter's username
         }
 
-        # Step 5: Upload report data and video to Azure Blob Storage
+        # Step 9: Upload report data and video to Azure Blob Storage
         with open(video_path, "rb") as video_file:
             upload_report_to_blob(report_data, video_file)
 
@@ -289,6 +300,7 @@ async def report_user(
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 @app.post("/reportUserAdmin")
 def report_user_admin(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
