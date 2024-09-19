@@ -303,78 +303,33 @@ async def report_user(
 
 
 @app.post("/reportUserAdmin")
-def report_user_admin(report_request: ReportRequest, token: str = Depends(oauth2_scheme)):
+def report_user_admin(
+    reported_username: str = Form(...),
+    report_cause: str = Form(...),
+    report_description: str = Form(...),
+    report_date: str = Form(...),
+    platform: str = Form(...),
+    reporter_username: str = Form(...)
+):
     try:
-        # Extract the reporter's email from the authenticated token
-        payload = verify_token(token)
-        reporter_email = payload.get("sub")
-        if not reporter_email:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        # Validate platform input
-        platform = report_request.platform.lower()
+        # Step 1: Validate platform input
+        platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
-        # Get the reporter's username from the UserProfiles table
+        # Step 2: Connect to the database and get reporter's ID
         conn = get_conn()
         cursor = conn.cursor()
-        cursor.execute("SELECT Username FROM UserProfiles WHERE Email = ?", reporter_email)
-        reporter_row = cursor.fetchone()
-        if not reporter_row:
-            raise HTTPException(status_code=404, detail="Reporter not found")
-        
-        reporter_username = reporter_row[0]
 
-        # Fetch the reporter's ID
-        cursor.execute("SELECT ID FROM UserProfiles WHERE Email = ?", reporter_email)
+        cursor.execute("SELECT ID FROM UserProfiles WHERE Username = ?", reporter_username)
         reporter_row = cursor.fetchone()
         if not reporter_row:
             raise HTTPException(status_code=404, detail="Reporter not found")
         
         reporter_id = reporter_row[0]
 
-        first_name = ""
-        last_name = ""
-
-        # Handle Snapchat: Call Snapchat API first to validate the reported username
-        if platform == "snapchat":
-            run_input = { "username": [report_request.reported_username] }
-            try:
-                run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
-                dataset_id = run["defaultDatasetId"]
-
-                # Fetch the dataset items
-                dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
-                
-                if not dataset_items:
-                    raise Exception("No data retrieved from Snapchat API")
-                
-                # Accessing the first item from the dataset items
-                first_item = dataset_items[0] if dataset_items else None
-
-                if first_item and 'result' in first_item:
-                    result = first_item['result'][0]  # Access the first result dictionary
-
-                    # Check if the account is "no_exist_or_banned"
-                    if result.get("accountType", "") == "no_exist_or_banned":
-                        return {"message": "This account does not exist, the report was not submitted."}
-
-                    # Extract the name
-                    full_name = result.get('name', '')
-                    if full_name:
-                        name_parts = full_name.split(" ")
-                        first_name = name_parts[0]
-                        last_name = name_parts[1] if len(name_parts) > 1 else ""
-                    else:
-                        first_name, last_name = "", ""
-
-            except Exception as e:
-                print(f"Error retrieving data from Snapchat API: {str(e)}")
-                raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
-
-        # Determine which table to interact with based on the platform
+        # Step 3: Determine which table to interact with based on the platform
         if platform == "snapchat":
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
@@ -391,61 +346,53 @@ def report_user_admin(report_request: ReportRequest, token: str = Depends(oauth2
             last_name_field = "Tinder_Account_LastName"
             foreign_key_column = "TinderUserID"
 
-        # Step 1: Check if the reported username already exists in the platform-specific table
-        cursor.execute(f"SELECT ID, Report_Counts, {first_name_field}, {last_name_field} FROM {table_name} WHERE Username = ?", report_request.reported_username)
+        # Step 4: Check if the reported username already exists in the platform-specific table
+        cursor.execute(f"SELECT ID, Report_Counts, {first_name_field}, {last_name_field} FROM {table_name} WHERE Username = ?", reported_username)
         existing_user = cursor.fetchone()
 
         if existing_user:
             # The user already exists in the database
             user_id, report_counts, db_first_name, db_last_name = existing_user
 
-            # If the user doesn't have a name in the database and the platform is Snapchat, update it
-            if platform == "snapchat" and (not db_first_name or not db_last_name):
-                cursor.execute(f"""
-                    UPDATE {table_name}
-                    SET {first_name_field} = ?, {last_name_field} = ?
-                    WHERE ID = ?
-                """, (first_name, last_name, user_id))
-
             # Increment the report counts
             new_report_count = report_counts + 1
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
 
         else:
-            # Step 2: If the user doesn't exist in the platform-specific table, insert them
+            # Step 5: If the user doesn't exist in the platform-specific table, insert them
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
                 VALUES (?, ?, ?, ?)
-            """, (report_request.reported_username, first_name, last_name, 1))
+            """, (reported_username, "", "", 1))  # Insert with empty first_name, last_name as we assume it's not needed now
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
 
-        # Step 3: Insert the report into the Reports table and fetch the new Report ID
-        report_date = datetime.now()
+        # Step 6: Insert the report into the Reports table and fetch the new Report ID
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform)
             OUTPUT INSERTED.ID
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (report_request.reported_username, reporter_username, report_request.report_cause, report_date, report_request.report_description, platform.capitalize()))
+        """, (reported_username, reporter_username, report_cause, report_date, report_description, platform.capitalize()))
 
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 4: Link the report to the user with the correct foreign key column for the platform
+        # Step 7: Link the report to the user with the correct foreign key column for the platform
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
         return {"message": "Report submitted successfully", "Report ID": report_id}
-    
+
     except Exception as e:
         import traceback
-        traceback.print_exc()  # Log full exception
+        traceback.print_exc()  # Log full exception for debugging
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
