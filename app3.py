@@ -422,6 +422,7 @@ def report_user_admin(
 
 
 
+
 #Searching routes
 @app.get("/getReportsByUsername/{platform}/{reported_username}", dependencies=[Depends(get_current_user)])
 def get_reports_by_username(platform: str, reported_username: str, user_email: str = Depends(get_current_user)):
@@ -922,21 +923,31 @@ def delete_blob_folder(container_name: str, blob_prefix: str):
         # Initialize the container client
         container_client = blob_service_client.get_container_client(container_name)
         
+        # Check if the container exists
+        if not container_client.exists():
+            print(f"Error: Container '{container_name}' does not exist.")
+            return False
+
         # List all blobs in the container with the specified prefix (like a folder)
-        blob_list = container_client.list_blobs(name_starts_with=blob_prefix)
-        
+        blob_list = list(container_client.list_blobs(name_starts_with=blob_prefix))
+
+        if not blob_list:
+            print(f"No blobs found with prefix '{blob_prefix}' in container '{container_name}'.")
+            return False
+
         # Iterate through each blob and delete it
         for blob in blob_list:
             blob_name = blob.name
             print(f"Deleting blob: {blob_name}")
             container_client.delete_blob(blob_name)
 
-        print(f"All blobs under the prefix {blob_prefix} have been deleted.")
+        print(f"All blobs under the prefix '{blob_prefix}' have been deleted.")
         return True
 
     except Exception as e:
-        print(f"Error deleting blobs in folder {blob_prefix}: {str(e)}")
+        print(f"Error deleting blobs in folder '{blob_prefix}': {str(e)}")
         return False
+
 
 
 
