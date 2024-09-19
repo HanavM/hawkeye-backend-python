@@ -385,7 +385,7 @@ def report_user_admin(
         conn.commit()
 
         # Step 7: Delete the corresponding blob folder (if applicable)
-        deleted = delete_blob_folder("your_container_name", blob_entry_name)
+        deleted = delete_blob_folder("reports-to-be-validated", blob_entry_name)
         if not deleted:
             raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
         
