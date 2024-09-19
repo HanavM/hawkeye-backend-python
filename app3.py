@@ -307,7 +307,6 @@ def report_user_admin(
     reported_username: str = Form(...),
     report_cause: str = Form(...),
     report_description: str = Form(...),
-    report_date: str = Form(...),
     platform: str = Form(...),
     reporter_username: str = Form(...)
 ):
@@ -334,7 +333,7 @@ def report_user_admin(
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
             last_name_field = "Snapchat_Account_LastName"
-            foreign_key_column = "SnapchatUserID"  # Updated from UserID to SnapchatUserID
+            foreign_key_column = "SnapchatUserID"
         elif platform == "instagram":
             table_name = "ReportedUsersInstagram"
             first_name_field = "Instagram_Account_FirstName"
@@ -371,6 +370,7 @@ def report_user_admin(
             user_id = new_user_id_row[0]
 
         # Step 6: Insert the report into the Reports table and fetch the new Report ID
+        report_date = datetime.now()  # Automatically generate the current date and time
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform)
             OUTPUT INSERTED.ID
