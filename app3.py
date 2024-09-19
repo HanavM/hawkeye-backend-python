@@ -326,7 +326,13 @@ def report_user_admin(
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
-        # Step 2: Connect to the database and get reporter's ID
+        # Step 2: Attempt to delete the corresponding blob folder first
+        deleted = delete_blob_folder("reports-to-be-validated", blob_entry_name)
+        if not deleted:
+            # Log the error and return early if the blob folder doesn't exist or couldn't be deleted
+            return {"message": "Blob folder not found. No report submitted."}
+
+        # Step 3: Connect to the database and get reporter's ID
         conn = get_conn()
         cursor = conn.cursor()
 
@@ -337,7 +343,7 @@ def report_user_admin(
         
         reporter_id = reporter_row[0]
 
-        # Step 3: Determine which table to interact with based on the platform
+        # Step 4: Determine which table to interact with based on the platform
         if platform == "snapchat":
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
@@ -354,7 +360,7 @@ def report_user_admin(
             last_name_field = "Tinder_Account_LastName"
             foreign_key_column = "TinderUserID"
 
-        # Step 4: Check if the reported username already exists in the platform-specific table
+        # Step 5: Check if the reported username already exists in the platform-specific table
         cursor.execute(f"SELECT ID, Report_Counts, {first_name_field}, {last_name_field} FROM {table_name} WHERE Username = ?", reported_username)
         existing_user = cursor.fetchone()
 
@@ -375,7 +381,7 @@ def report_user_admin(
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
 
         else:
-            # Step 5: If the user doesn't exist in the platform-specific table, insert them
+            # Step 6: If the user doesn't exist in the platform-specific table, insert them
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
@@ -386,7 +392,7 @@ def report_user_admin(
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
 
-        # Step 6: Insert the report into the Reports table and fetch the new Report ID
+        # Step 7: Insert the report into the Reports table and fetch the new Report ID
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform)
             OUTPUT INSERTED.ID
@@ -398,22 +404,18 @@ def report_user_admin(
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 7: Link the report to the user with the correct foreign key column for the platform
+        # Step 8: Link the report to the user with the correct foreign key column for the platform
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
 
-        # Step 8: Delete the corresponding blob folder (if applicable)
-        deleted = delete_blob_folder("reports-to-be-validated", blob_entry_name)
-        if not deleted:
-            raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
-        
         return {"message": "Report submitted successfully, first/last names updated, and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
