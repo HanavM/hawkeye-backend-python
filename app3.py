@@ -15,6 +15,9 @@ import cv2
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
+
+
+
 # JWT Secret Key
 SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
 ALGORITHM = "HS256"
@@ -308,7 +311,8 @@ def report_user_admin(
     report_cause: str = Form(...),
     report_description: str = Form(...),
     platform: str = Form(...),
-    reporter_username: str = Form(...)
+    reporter_username: str = Form(...),
+    blob_entry_name: str = Form(...)  # New field for blob entry name
 ):
     try:
         # Step 1: Validate platform input
@@ -385,8 +389,21 @@ def report_user_admin(
         # Step 7: Link the report to the user with the correct foreign key column for the platform
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
+        # Commit the changes to the database
         conn.commit()
-        return {"message": "Report submitted successfully", "Report ID": report_id}
+
+        # Step 8: Delete the blob entry
+        try:
+            blob_container_name = "your-container-name"  # Replace with your actual container name
+            blob_client = blob_service_client.get_blob_client(container=blob_container_name, blob=blob_entry_name)
+            blob_client.delete_blob()
+            print(f"Blob '{blob_entry_name}' successfully deleted.")
+        except Exception as e:
+            print(f"Error deleting blob: {str(e)}")
+            # Continue without raising an error because the report was already submitted
+            pass
+
+        return {"message": "Report submitted successfully and blob deleted", "Report ID": report_id}
 
     except Exception as e:
         import traceback
