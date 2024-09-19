@@ -280,7 +280,7 @@ async def report_user(
         # Step 7: Extract text from the video frames
         extracted_text = process_video(video_path, frame_interval=120)
 
-        # Step 8: Prepare the report data (including reporter_username)
+        # Step 8: Prepare the report data (including reporter_username, first_name, last_name)
         report_data = {
             "reported_username": reported_username,
             "report_cause": report_cause,
@@ -288,7 +288,9 @@ async def report_user(
             "report_date": str(datetime.now()),
             "platform": platform.capitalize(),
             "extracted_text": extracted_text,
-            "reporter_username": reporter_username  # Add reporter's username
+            "reporter_username": reporter_username,  # Add reporter's username
+            "first_name": first_name,  # Add first name from Snapchat API
+            "last_name": last_name     # Add last name from Snapchat API
         }
 
         # Step 9: Upload report data and video to Azure Blob Storage
@@ -305,6 +307,7 @@ async def report_user(
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 
+
 @app.post("/reportUserAdmin")
 def report_user_admin(
     reported_username: str = Form(...),
@@ -312,7 +315,9 @@ def report_user_admin(
     report_description: str = Form(...),
     platform: str = Form(...),
     reporter_username: str = Form(...),
-    blob_entry_name: str = Form(...)  # Expecting something like "azgedaspy_20240919-074316"
+    first_name: str = Form(...),  # First name input
+    last_name: str = Form(...),   # Last name input
+    blob_entry_name: str = Form(...)  # Blob entry name
 ):
     try:
         # Step 1: Validate platform input
@@ -354,47 +359,62 @@ def report_user_admin(
         existing_user = cursor.fetchone()
 
         if existing_user:
+            # The user already exists in the database
             user_id, report_counts, db_first_name, db_last_name = existing_user
+
+            # Update first name and last name if empty
+            if not db_first_name or not db_last_name:
+                cursor.execute(f"""
+                    UPDATE {table_name}
+                    SET {first_name_field} = ?, {last_name_field} = ?
+                    WHERE ID = ?
+                """, (first_name, last_name, user_id))
+
+            # Increment the report counts
             new_report_count = report_counts + 1
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
+
         else:
+            # Step 5: If the user doesn't exist in the platform-specific table, insert them
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
                 VALUES (?, ?, ?, ?)
-            """, (reported_username, "", "", 1))
+            """, (reported_username, first_name, last_name, 1))  # Insert with first_name and last_name from the form
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
 
-        # Step 5: Insert the report into the Reports table
+        # Step 6: Insert the report into the Reports table and fetch the new Report ID
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform)
             OUTPUT INSERTED.ID
             VALUES (?, ?, ?, GETDATE(), ?, ?)
         """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize()))
+
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 6: Link the report to the user
+        # Step 7: Link the report to the user with the correct foreign key column for the platform
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
 
-        # Step 7: Delete the corresponding blob folder (if applicable)
+        # Step 8: Delete the corresponding blob folder (if applicable)
         deleted = delete_blob_folder("reports-to-be-validated", blob_entry_name)
         if not deleted:
             raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
         
-        return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
+        return {"message": "Report submitted successfully, first/last names updated, and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
