@@ -310,27 +310,37 @@ async def report_user(
 
 @app.post("/reportUserAdmin")
 def report_user_admin(
-    reported_username: str = Form(...),
-    report_cause: str = Form(...),
-    report_description: str = Form(...),
-    platform: str = Form(...),
-    reporter_username: str = Form(...),
-    first_name: str = Form(...),  # First name input
-    last_name: str = Form(...),   # Last name input
-    blob_entry_name: str = Form(...)  # Blob entry name
+    blob_entry_name: str = Form(...)  # Expecting something like "azgedaspy_20240919-074316"
 ):
     try:
-        # Step 1: Validate platform input
+        # Step 1: Access the blob metadata
+        container_name = "reports-to-be-validated"
+        blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name)
+        
+        if not blob_client.exists():
+            raise HTTPException(status_code=404, detail="Blob entry not found")
+
+        # Fetch metadata from the blob
+        blob_metadata = blob_client.get_blob_properties().metadata
+        
+        # Extract necessary fields from metadata
+        reported_username = blob_metadata.get("reported_username")
+        report_cause = blob_metadata.get("report_cause")
+        report_description = blob_metadata.get("report_description")
+        platform = blob_metadata.get("platform")
+        reporter_username = blob_metadata.get("reporter_username")
+        extracted_text = blob_metadata.get("extracted_text")
+        first_name = blob_metadata.get("first_name")
+        last_name = blob_metadata.get("last_name")
+
+        if not all([reported_username, report_cause, platform, reporter_username]):
+            raise HTTPException(status_code=400, detail="Incomplete metadata in blob")
+
+        # Step 2: Validate platform input
         platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
-
-        # Step 2: Attempt to delete the corresponding blob folder first
-        deleted = delete_blob_folder("reports-to-be-validated", blob_entry_name)
-        if not deleted:
-            # Log the error and return early if the blob folder doesn't exist or couldn't be deleted
-            return {"message": "Blob folder not found. No report submitted."}
 
         # Step 3: Connect to the database and get reporter's ID
         conn = get_conn()
@@ -365,56 +375,49 @@ def report_user_admin(
         existing_user = cursor.fetchone()
 
         if existing_user:
-            # The user already exists in the database
             user_id, report_counts, db_first_name, db_last_name = existing_user
-
-            # Update first name and last name if empty
-            if not db_first_name or not db_last_name:
-                cursor.execute(f"""
-                    UPDATE {table_name}
-                    SET {first_name_field} = ?, {last_name_field} = ?
-                    WHERE ID = ?
-                """, (first_name, last_name, user_id))
-
-            # Increment the report counts
             new_report_count = report_counts + 1
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
-
         else:
-            # Step 6: If the user doesn't exist in the platform-specific table, insert them
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
                 VALUES (?, ?, ?, ?)
-            """, (reported_username, first_name, last_name, 1))  # Insert with first_name and last_name from the form
+            """, (reported_username, first_name, last_name, 1))
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
 
-        # Step 7: Insert the report into the Reports table and fetch the new Report ID
+        # Step 6: Insert the report into the Reports table with extracted_text
         cursor.execute("""
-            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform)
+            INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform, Extracted_Text)
             OUTPUT INSERTED.ID
-            VALUES (?, ?, ?, GETDATE(), ?, ?)
-        """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize()))
-
+            VALUES (?, ?, ?, GETDATE(), ?, ?, ?)
+        """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize(), extracted_text))
+        
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 8: Link the report to the user with the correct foreign key column for the platform
+        # Step 7: Link the report to the user
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
 
-        return {"message": "Report submitted successfully, first/last names updated, and blob entry deleted.", "Report ID": report_id}
+        # Step 8: Delete the corresponding blob folder
+        deleted = delete_blob_folder(container_name, blob_entry_name)
+        if not deleted:
+            raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
+        
+        return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
