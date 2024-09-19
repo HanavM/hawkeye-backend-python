@@ -312,7 +312,7 @@ def report_user_admin(
     report_description: str = Form(...),
     platform: str = Form(...),
     reporter_username: str = Form(...),
-    blob_entry_name: str = Form(...)  # New field for blob entry name
+    blob_entry_name: str = Form(...)  # Expecting something like "azgedaspy_20240919-074316"
 ):
     try:
         # Step 1: Validate platform input
@@ -354,60 +354,46 @@ def report_user_admin(
         existing_user = cursor.fetchone()
 
         if existing_user:
-            # The user already exists in the database
             user_id, report_counts, db_first_name, db_last_name = existing_user
-
-            # Increment the report counts
             new_report_count = report_counts + 1
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
-
         else:
-            # Step 5: If the user doesn't exist in the platform-specific table, insert them
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
                 VALUES (?, ?, ?, ?)
-            """, (reported_username, "", "", 1))  # Insert with empty first_name, last_name as we assume it's not needed now
+            """, (reported_username, "", "", 1))
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
 
-        # Step 6: Insert the report into the Reports table and fetch the new Report ID
-        report_date = datetime.now()  # Automatically generate the current date and time
+        # Step 5: Insert the report into the Reports table
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform)
             OUTPUT INSERTED.ID
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (reported_username, reporter_username, report_cause, report_date, report_description, platform.capitalize()))
-
+            VALUES (?, ?, ?, GETDATE(), ?, ?)
+        """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize()))
         report_id_row = cursor.fetchone()
         if report_id_row is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 7: Link the report to the user with the correct foreign key column for the platform
+        # Step 6: Link the report to the user
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
-        # Commit the changes to the database
         conn.commit()
 
-        # Step 8: Delete the blob entry
-        try:
-            blob_container_name = "your-container-name"  # Replace with your actual container name
-            blob_client = blob_service_client.get_blob_client(container=blob_container_name, blob=blob_entry_name)
-            blob_client.delete_blob()
-            print(f"Blob '{blob_entry_name}' successfully deleted.")
-        except Exception as e:
-            print(f"Error deleting blob: {str(e)}")
-            # Continue without raising an error because the report was already submitted
-            pass
-
-        return {"message": "Report submitted successfully and blob deleted", "Report ID": report_id}
+        # Step 7: Delete the corresponding blob folder (if applicable)
+        deleted = delete_blob_folder("your_container_name", blob_entry_name)
+        if not deleted:
+            raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
+        
+        return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
         import traceback
-        traceback.print_exc()  # Log full exception for debugging
+        traceback.print_exc()
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 
@@ -909,7 +895,26 @@ def upload_report_to_blob(report_data, video_file):
     except Exception as e:
         print(f"Error uploading report: {str(e)}")
 
+def delete_blob_folder(container_name: str, blob_prefix: str):
+    try:
+        # Initialize the container client
+        container_client = blob_service_client.get_container_client(container_name)
+        
+        # List all blobs in the container with the specified prefix (like a folder)
+        blob_list = container_client.list_blobs(name_starts_with=blob_prefix)
+        
+        # Iterate through each blob and delete it
+        for blob in blob_list:
+            blob_name = blob.name
+            print(f"Deleting blob: {blob_name}")
+            container_client.delete_blob(blob_name)
 
+        print(f"All blobs under the prefix {blob_prefix} have been deleted.")
+        return True
+
+    except Exception as e:
+        print(f"Error deleting blobs in folder {blob_prefix}: {str(e)}")
+        return False
 
 
 
