@@ -22,7 +22,6 @@ ALGORITHM = "HS256"
 connection_string_blob = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 container_name = "reports-to-be-validated"
 subscription_key = os.getenv("AZURE_SUBSCRIPTION_KEY")
-subscription_key = "55f1a99e6cce406eb37567a7e6cf1d13"
 ocr_endpoint = "https://hawkeye-cv-test2-hanavmodasiya.cognitiveservices.azure.com/vision/v3.2/ocr"
 frame_output_dir = "frames"
 
