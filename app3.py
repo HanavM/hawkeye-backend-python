@@ -313,17 +313,28 @@ def report_user_admin(
     blob_entry_name: str = Form(...)  # Expecting something like "azgedaspy_20240919-074316"
 ):
     try:
-        # Step 1: Access the blob metadata
         container_name = "reports-to-be-validated"
+
+        # Step 1: Access the blob metadata
+        print(f"Accessing blob: Container - {container_name}, Blob Name - {blob_entry_name}")
+
+        # Check if the container and blob exist
+        container_client = blob_service_client.get_container_client(container_name)
+
+        if not container_client.exists():
+            print(f"Container '{container_name}' not found.")
+            raise HTTPException(status_code=404, detail=f"Container '{container_name}' not found")
+
         blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name)
-        
+
         if not blob_client.exists():
+            print(f"Blob entry '{blob_entry_name}' not found in container '{container_name}'")
             raise HTTPException(status_code=404, detail="Blob entry not found")
 
-        # Fetch metadata from the blob
         blob_metadata = blob_client.get_blob_properties().metadata
         
-        # Extract necessary fields from metadata
+        print(f"Blob metadata: {blob_metadata}")
+
         reported_username = blob_metadata.get("reported_username")
         report_cause = blob_metadata.get("report_cause")
         report_description = blob_metadata.get("report_description")
@@ -334,15 +345,14 @@ def report_user_admin(
         last_name = blob_metadata.get("last_name")
 
         if not all([reported_username, report_cause, platform, reporter_username]):
+            print("Incomplete metadata in blob.")
             raise HTTPException(status_code=400, detail="Incomplete metadata in blob")
 
-        # Step 2: Validate platform input
         platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
-        # Step 3: Connect to the database and get reporter's ID
         conn = get_conn()
         cursor = conn.cursor()
 
@@ -353,7 +363,6 @@ def report_user_admin(
         
         reporter_id = reporter_row[0]
 
-        # Step 4: Determine which table to interact with based on the platform
         if platform == "snapchat":
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
@@ -370,7 +379,6 @@ def report_user_admin(
             last_name_field = "Tinder_Account_LastName"
             foreign_key_column = "TinderUserID"
 
-        # Step 5: Check if the reported username already exists in the platform-specific table
         cursor.execute(f"SELECT ID, Report_Counts, {first_name_field}, {last_name_field} FROM {table_name} WHERE Username = ?", reported_username)
         existing_user = cursor.fetchone()
 
@@ -389,7 +397,6 @@ def report_user_admin(
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
 
-        # Step 6: Insert the report into the Reports table with extracted_text
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform, Extracted_Text)
             OUTPUT INSERTED.ID
@@ -401,23 +408,20 @@ def report_user_admin(
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
 
-        # Step 7: Link the report to the user
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
 
         conn.commit()
 
-        # Step 8: Delete the corresponding blob folder
         deleted = delete_blob_folder(container_name, blob_entry_name)
         if not deleted:
-            print(f"Failed to delete blob: {blob_entry_name}")
-            raise HTTPException(status_code=404, detail="Failed to delete the associated blob folder.")
+            raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
         
         return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        print(f"Error occurred: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
