@@ -1,6 +1,7 @@
 import os
 import pyodbc
 import traceback
+import logging
 import jwt
 import bcrypt
 from datetime import datetime, timedelta
@@ -17,6 +18,7 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
 
+logging.basicConfig(level=logging.INFO)
 
 
 # JWT Secret Key
@@ -312,17 +314,35 @@ async def report_user(
 @app.post("/reportUserAdmin")
 def report_user_admin(blob_entry_name: str = Form(...)):
     try:
+        logging.info(f"Received request to process blob entry: {blob_entry_name}")
+
+        # Validate input early
+        if not blob_entry_name:
+            logging.error("Input error: Blob entry name is missing")
+            raise HTTPException(status_code=400, detail="Blob entry name is required")
+
         # Step 1: Access the blob metadata
         container_name = "reports-to-be-validated"
+        logging.info(f"Attempting to access blob in container {container_name} with entry name {blob_entry_name}")
+
         blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name)
         
-        # Check if the blob entry exists
         if not blob_client.exists():
+            logging.error(f"Blob entry {blob_entry_name} not found")
             raise HTTPException(status_code=404, detail="Blob entry not found")
-
+        
+        logging.info(f"Blob entry {blob_entry_name} found. Fetching metadata.")
+        
         # Fetch metadata from the blob
         blob_metadata = blob_client.get_blob_properties().metadata
-        
+
+        # Ensure metadata is present
+        if not blob_metadata:
+            logging.error(f"Metadata for blob entry {blob_entry_name} is missing")
+            raise HTTPException(status_code=400, detail="Metadata is missing for the specified blob entry")
+
+        logging.info(f"Blob metadata retrieved: {blob_metadata}")
+
         # Extract necessary fields from metadata
         reported_username = blob_metadata.get("reported_username")
         report_cause = blob_metadata.get("report_cause")
@@ -333,15 +353,21 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         first_name = blob_metadata.get("first_name")
         last_name = blob_metadata.get("last_name")
 
-        # Validate that necessary fields are present
+        # Check for required fields in metadata
         if not all([reported_username, report_cause, platform, reporter_username]):
+            logging.error(f"Incomplete metadata in blob entry {blob_entry_name}")
             raise HTTPException(status_code=400, detail="Incomplete metadata in blob")
+
+        logging.info(f"All required metadata fields are present for {reported_username}. Proceeding to validation.")
 
         # Step 2: Validate platform input
         platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
+            logging.error(f"Invalid platform: {platform}")
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
+        
+        logging.info(f"Platform {platform} is valid. Connecting to database.")
 
         # Step 3: Connect to the database and get reporter's ID
         conn = get_conn()
@@ -350,11 +376,13 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         cursor.execute("SELECT ID FROM UserProfiles WHERE Username = ?", reporter_username)
         reporter_row = cursor.fetchone()
         if not reporter_row:
+            logging.error(f"Reporter {reporter_username} not found in the database")
             raise HTTPException(status_code=404, detail="Reporter not found")
-        
-        reporter_id = reporter_row[0]
 
-        # Step 4: Determine which table to interact with based on the platform
+        reporter_id = reporter_row[0]
+        logging.info(f"Reporter ID retrieved: {reporter_id}")
+
+        # Step 4: Determine the platform-specific table and fields
         if platform == "snapchat":
             table_name = "ReportedUsersSnapchat"
             first_name_field = "Snapchat_Account_FirstName"
@@ -371,6 +399,8 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             last_name_field = "Tinder_Account_LastName"
             foreign_key_column = "TinderUserID"
 
+        logging.info(f"Table determined: {table_name}")
+
         # Step 5: Check if the reported username already exists in the platform-specific table
         cursor.execute(f"SELECT ID, Report_Counts, {first_name_field}, {last_name_field} FROM {table_name} WHERE Username = ?", reported_username)
         existing_user = cursor.fetchone()
@@ -379,6 +409,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             user_id, report_counts, db_first_name, db_last_name = existing_user
             new_report_count = report_counts + 1
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
+            logging.info(f"Updated report count for {reported_username}")
         else:
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
@@ -387,8 +418,10 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             """, (reported_username, first_name, last_name, 1))
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
+                logging.error("Failed to retrieve User ID after insertion")
                 raise HTTPException(status_code=500, detail="Failed to retrieve User ID")
             user_id = new_user_id_row[0]
+            logging.info(f"Inserted new user {reported_username} into {table_name}")
 
         # Step 6: Insert the report into the Reports table with extracted_text
         cursor.execute("""
@@ -396,27 +429,32 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             OUTPUT INSERTED.ID
             VALUES (?, ?, ?, GETDATE(), ?, ?, ?)
         """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize(), extracted_text))
-        
+
         report_id_row = cursor.fetchone()
         if report_id_row is None:
+            logging.error("Failed to retrieve Report ID after inserting the report")
             raise HTTPException(status_code=500, detail="Failed to retrieve Report ID")
         report_id = report_id_row[0]
+        logging.info(f"Report ID {report_id} created for {reported_username}")
 
         # Step 7: Link the report to the user
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
+        logging.info(f"Linked report ID {report_id} to user ID {user_id}")
 
         conn.commit()
 
         # Step 8: Delete the corresponding blob folder
         deleted = delete_blob_folder(container_name, blob_entry_name)
         if not deleted:
+            logging.error(f"Failed to delete blob folder {blob_entry_name}")
             raise HTTPException(status_code=500, detail="Failed to delete the associated blob folder.")
+        
+        logging.info(f"Blob entry {blob_entry_name} deleted successfully.")
         
         return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
-        # Print full traceback to logs
-        print(traceback.format_exc())
+        logging.error(f"Error submitting report: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 
