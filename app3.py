@@ -411,9 +411,21 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         if existing_user:
             user_id, report_counts, db_first_name, db_last_name = existing_user
             new_report_count = report_counts + 1
+
+            # Update the user with new report count
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
             logging.info(f"Updated report count for {reported_username}")
+            
+            # Optionally update first and last names if not present in the database
+            if not db_first_name or not db_last_name:
+                cursor.execute(f"""
+                    UPDATE {table_name}
+                    SET {first_name_field} = ?, {last_name_field} = ?
+                    WHERE ID = ?
+                """, (first_name, last_name, user_id))
+                logging.info(f"Updated first and last name for {reported_username}")
         else:
+            # Insert a new user into the platform-specific table
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
@@ -457,6 +469,8 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logging.error(f"Error submitting report: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
