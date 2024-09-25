@@ -322,21 +322,22 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             raise HTTPException(status_code=400, detail="Blob entry name is required")
         blob_entry_name = blob_entry_name.strip()
 
-        # Step 1: Access the blob metadata
+        # Step 1: Access the blob metadata (ensure we're pointing to metadata.json within the folder)
         container_name = "reports-to-be-validated"
-        logging.info(f"Attempting to access blob in container {container_name} with entry name {blob_entry_name}")
-        logging.info(f"Blob entry to be fetched: '{blob_entry_name}'")
+        metadata_file_path = f"{blob_entry_name}/metadata.json"  # Adjust path to point to metadata.json inside the folder
+        logging.info(f"Attempting to access metadata file in container {container_name} with entry name {metadata_file_path}")
 
-        blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name)
-        
+        blob_client = blob_service_client.get_blob_client(container_name, metadata_file_path)
+
         if not blob_client.exists():
-            logging.error(f"Blob entry {blob_entry_name} not found")
-            raise HTTPException(status_code=404, detail="Blob entry not found")
+            logging.error(f"Metadata file {metadata_file_path} not found")
+            raise HTTPException(status_code=404, detail="Metadata file not found")
         
-        logging.info(f"Blob entry {blob_entry_name} found. Fetching metadata.")
-        
-        # Fetch metadata from the blob
-        blob_metadata = blob_client.get_blob_properties().metadata
+        logging.info(f"Metadata file {metadata_file_path} found. Fetching metadata.")
+
+        # Fetch metadata from the metadata.json file
+        blob_data = blob_client.download_blob().readall()
+        blob_metadata = json.loads(blob_data)
 
         # Ensure metadata is present
         if not blob_metadata:
@@ -458,6 +459,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
     except Exception as e:
         logging.error(f"Error submitting report: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
