@@ -320,10 +320,12 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         if not blob_entry_name:
             logging.error("Input error: Blob entry name is missing")
             raise HTTPException(status_code=400, detail="Blob entry name is required")
+        blob_entry_name = blob_entry_name.strip()
 
         # Step 1: Access the blob metadata
         container_name = "reports-to-be-validated"
         logging.info(f"Attempting to access blob in container {container_name} with entry name {blob_entry_name}")
+        logging.info(f"Blob entry to be fetched: '{blob_entry_name}'")
 
         blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name)
         
@@ -460,7 +462,29 @@ def report_user_admin(blob_entry_name: str = Form(...)):
 
 
 
+@app.post("/checkBlob")
+async def check_blob(blob_entry_name: str = Form(...)):
+    try:
+        # Define the container name
+        container_name = "reports-to-be-validated"
 
+        # Log the blob name being checked
+        logging.info(f"Checking if blob exists: {blob_entry_name}")
+        
+        # Get the blob client
+        blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name.strip())
+
+        # Check if the blob exists
+        if blob_client.exists():
+            logging.info(f"Blob {blob_entry_name} found.")
+            return {"message": f"Blob '{blob_entry_name}' was found."}
+        else:
+            logging.error(f"Blob {blob_entry_name} not found.")
+            raise HTTPException(status_code=404, detail=f"Blob '{blob_entry_name}' not found.")
+
+    except Exception as e:
+        logging.error(f"Error checking blob {blob_entry_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error checking blob: {str(e)}")
 
 
 
