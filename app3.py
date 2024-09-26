@@ -322,22 +322,22 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             raise HTTPException(status_code=400, detail="Blob entry name is required")
         blob_entry_name = blob_entry_name.strip()
 
-        # Step 1: Access the blob metadata (ensure we're pointing to metadata.json within the folder)
+        # Step 1: Access the blob metadata
         container_name = "reports-to-be-validated"
-        metadata_file_path = f"{blob_entry_name}/metadata.json"  # Adjust path to point to metadata.json inside the folder
-        logging.info(f"Attempting to access metadata file in container {container_name} with entry name {metadata_file_path}")
+        logging.info(f"Attempting to access blob in container {container_name} with entry name {blob_entry_name}")
+        logging.info(f"Blob entry to be fetched: '{blob_entry_name}'")
 
-        blob_client = blob_service_client.get_blob_client(container_name, metadata_file_path)
-
-        if not blob_client.exists():
-            logging.error(f"Metadata file {metadata_file_path} not found")
-            raise HTTPException(status_code=404, detail="Metadata file not found")
+        blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name + "/metadata.json")
         
-        logging.info(f"Metadata file {metadata_file_path} found. Fetching metadata.")
-
-        # Fetch metadata from the metadata.json file
-        blob_data = blob_client.download_blob().readall()
-        blob_metadata = json.loads(blob_data)
+        if not blob_client.exists():
+            logging.error(f"Blob entry {blob_entry_name} not found")
+            raise HTTPException(status_code=404, detail="Blob entry not found")
+        
+        logging.info(f"Blob entry {blob_entry_name} found. Fetching metadata.")
+        
+        # Fetch metadata from the blob
+        blob_metadata = blob_client.download_blob().readall()
+        blob_metadata = json.loads(blob_metadata.decode('utf-8'))  # Convert byte data to JSON
 
         # Ensure metadata is present
         if not blob_metadata:
@@ -352,7 +352,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         report_description = blob_metadata.get("report_description")
         platform = blob_metadata.get("platform")
         reporter_username = blob_metadata.get("reporter_username")
-        extracted_text = blob_metadata.get("extracted_text")
+        extracted_text_list = blob_metadata.get("extracted_text")
         first_name = blob_metadata.get("first_name")
         last_name = blob_metadata.get("last_name")
 
@@ -411,21 +411,9 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         if existing_user:
             user_id, report_counts, db_first_name, db_last_name = existing_user
             new_report_count = report_counts + 1
-
-            # Update the user with new report count
             cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
             logging.info(f"Updated report count for {reported_username}")
-            
-            # Optionally update first and last names if not present in the database
-            if not db_first_name or not db_last_name:
-                cursor.execute(f"""
-                    UPDATE {table_name}
-                    SET {first_name_field} = ?, {last_name_field} = ?
-                    WHERE ID = ?
-                """, (first_name, last_name, user_id))
-                logging.info(f"Updated first and last name for {reported_username}")
         else:
-            # Insert a new user into the platform-specific table
             cursor.execute(f"""
                 INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
                 OUTPUT INSERTED.ID
@@ -438,12 +426,20 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             user_id = new_user_id_row[0]
             logging.info(f"Inserted new user {reported_username} into {table_name}")
 
-        # Step 6: Insert the report into the Reports table with extracted_text
+        # Step 6: Concatenate extracted text entries into a single string
+        if extracted_text_list:
+            extracted_text_str = "\n".join([f"Frame {entry['frame']}: {entry['text']}" for entry in extracted_text_list])
+        else:
+            extracted_text_str = ""
+
+        logging.info(f"Concatenated extracted text: {extracted_text_str}")
+
+        # Step 7: Insert the report into the Reports table with the concatenated extracted_text
         cursor.execute("""
             INSERT INTO Reports (Reported_Username, Reporter_Username, Report_Cause, Report_Date, Report_Description, Platform, Extracted_Text)
             OUTPUT INSERTED.ID
             VALUES (?, ?, ?, GETDATE(), ?, ?, ?)
-        """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize(), extracted_text))
+        """, (reported_username, reporter_username, report_cause, report_description, platform.capitalize(), extracted_text_str))
 
         report_id_row = cursor.fetchone()
         if report_id_row is None:
@@ -452,13 +448,13 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         report_id = report_id_row[0]
         logging.info(f"Report ID {report_id} created for {reported_username}")
 
-        # Step 7: Link the report to the user
+        # Step 8: Link the report to the user
         cursor.execute(f"INSERT INTO ReportedUsersReports ({foreign_key_column}, ReportID, UserReportingID) VALUES (?, ?, ?)", (user_id, report_id, reporter_id))
         logging.info(f"Linked report ID {report_id} to user ID {user_id}")
 
         conn.commit()
 
-        # Step 8: Delete the corresponding blob folder
+        # Step 9: Delete the corresponding blob folder
         deleted = delete_blob_folder(container_name, blob_entry_name)
         if not deleted:
             logging.error(f"Failed to delete blob folder {blob_entry_name}")
@@ -469,10 +465,9 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         logging.error(f"Error submitting report: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
+
 
 
 
