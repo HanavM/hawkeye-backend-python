@@ -16,6 +16,7 @@ import json
 import cv2
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from azure.storage.blob import BlobServiceClient, ContentSettings
+from instagram import Instagram
 
 
 logging.basicConfig(level=logging.INFO)
@@ -131,6 +132,9 @@ def root():
         print(f"Error: {e}")
     return {"message": "Person API root"}
 
+# instagram script
+
+
 
 
 #User authentication routes
@@ -242,7 +246,7 @@ async def report_user(
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
-        # Step 4: Handle Snapchat API validation
+        # Step 4.1: Handle Snapchat API validation
         first_name = ""
         last_name = ""
         if platform == "snapchat":
@@ -267,9 +271,24 @@ async def report_user(
                         last_name = name_parts[1] if len(name_parts) > 1 else ""
 
             except Exception as e:
-                print(f"Error retrieving data from Snapchat API: {str(e)}")
-                raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
+                print(f"Error retrieving data from Snapchat API: {str(e)} so the name is set to nothing")
+                # raise HTTPException(status_code=500, detail="Error retrieving data from Snapchat API")
 
+
+        #Step 4.2: Handle instagram scraping validation
+        if platform == "instagram":
+            try:
+                profile_data = Instagram.scrap(reported_username)
+                profile_data = json.loads(profile_data)
+                full_name = profile_data["full_name"]
+                if full_name:
+                    name_parts = full_name.split(" ")
+                    first_name = name_parts[0]
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""
+            except Exception as e:
+                return {"message": "This account does not exist, the report was not submitted."}
+
+            
         # Step 5: Ensure the directory for video files exists
         video_dir = "temp_videos"
         if not os.path.exists(video_dir):
