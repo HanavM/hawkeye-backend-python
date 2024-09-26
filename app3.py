@@ -421,6 +421,20 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             last_name_field = "Tinder_Account_LastName"
             foreign_key_column = "TinderUserID"
 
+        first_name = ""
+        last_name = ""
+        if platform == "instagram":
+            try:
+                profile_data = Instagram.scrap(reported_username)
+                profile_data = json.loads(profile_data)
+                full_name = profile_data["full_name"]
+                if full_name:
+                    name_parts = full_name.split(" ")
+                    first_name = name_parts[0]
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""
+            except Exception as e:
+                return {"message": "This account does not exist, the report was not submitted."}
+
         logging.info(f"Table determined: {table_name}")
 
         # Step 5: Check if the reported username already exists in the platform-specific table
@@ -429,8 +443,17 @@ def report_user_admin(blob_entry_name: str = Form(...)):
 
         if existing_user:
             user_id, report_counts, db_first_name, db_last_name = existing_user
+            if (first_name != ""):
+                db_first_name = first_name
+            if (last_name != ""):
+                db_last_name = last_name
             new_report_count = report_counts + 1
-            cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
+            cursor.execute(f"""
+                UPDATE {table_name}
+                SET Report_Counts = ?, {first_name_field} = ?, {last_name_field} = ?
+                WHERE ID = ?
+            """, (new_report_count, db_first_name, db_last_name, user_id))
+            # cursor.execute(f"UPDATE {table_name} SET Report_Counts = ? WHERE ID = ?", (new_report_count, user_id))
             logging.info(f"Updated report count for {reported_username}")
         else:
             cursor.execute(f"""
