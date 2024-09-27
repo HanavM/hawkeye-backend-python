@@ -63,6 +63,19 @@ class UserProfileRequest(BaseModel):
     user: User
     profile: UserProfile
 
+class UserProfileResponse(BaseModel):
+    user_id: int
+    username: str
+    age: int
+    state: str
+    snapchat_username: str = None
+    instagram_username: str = None
+    tinder_username: str = None
+    email: str
+    previously_searched: str = None
+    is_premium: bool
+    searched_count: int
+
 
 class ReportRequest(BaseModel):
     reported_username: str
@@ -210,7 +223,38 @@ def register_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
-
+@app.get("/fetch-user-profile/{email}", response_model=UserProfileResponse)
+def fetch_user_profile(email: str):
+    conn = get_conn()
+    cursor = conn.cursor()
+    
+    query = """
+        SELECT UserID, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, Email, 
+               Previously_Searched, is_premium, searched_count
+        FROM dbo.UserProfiles
+        WHERE Email = ?
+    """
+    
+    cursor.execute(query, email)
+    row = cursor.fetchone()
+    
+    if row:
+        # Create the response from the fetched row
+        return UserProfileResponse(
+            user_id=row.UserID,
+            username=row.Username,
+            age=row.Age,
+            state=row.State,
+            snapchat_username=row.SnapchatUsername,
+            instagram_username=row.InstagramUsername,
+            tinder_username=row.TinderUsername,
+            email=row.Email,
+            previously_searched=row.Previously_Searched,
+            is_premium=row.is_premium,
+            searched_count=row.searched_count
+        )
+    else:
+        raise HTTPException(status_code=404, detail="User profile not found")
 
 
 #Reporting routes
