@@ -241,11 +241,11 @@ def fetch_user_profile(email: str):
     
     if row:
         # Handle the case where user_id or other fields might be None
-        if row.UserID is None:
+        if row.Username is None:
             raise HTTPException(status_code=404, detail="User profile not found or missing ID")
 
         return UserProfileResponse(
-            user_id=row.UserID,
+            user_id=-1,
             username=row.Username if row.Username else None,
             age=row.Age if row.Age else None,
             state=row.State if row.State else None,
