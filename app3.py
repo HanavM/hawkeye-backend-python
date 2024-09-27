@@ -65,16 +65,16 @@ class UserProfileRequest(BaseModel):
 
 class UserProfileResponse(BaseModel):
     user_id: int
-    username: str
-    age: int
-    state: str
+    username: str = None
+    age: int = None
+    state: str = None
     snapchat_username: str = None
     instagram_username: str = None
     tinder_username: str = None
     email: str
     previously_searched: str = None
-    is_premium: bool
-    searched_count: int
+    is_premium: bool = False
+    searched_count: int = 0
 
 
 class ReportRequest(BaseModel):
@@ -223,6 +223,7 @@ def register_user(user: User):
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
+
 @app.get("/fetch-user-profile/{email}", response_model=UserProfileResponse)
 def fetch_user_profile(email: str):
     conn = get_conn()
@@ -239,19 +240,22 @@ def fetch_user_profile(email: str):
     row = cursor.fetchone()
     
     if row:
-        # Create the response from the fetched row
+        # Handle the case where user_id or other fields might be None
+        if row.UserID is None:
+            raise HTTPException(status_code=404, detail="User profile not found or missing ID")
+
         return UserProfileResponse(
             user_id=row.UserID,
-            username=row.Username,
-            age=row.Age,
-            state=row.State,
-            snapchat_username=row.SnapchatUsername,
-            instagram_username=row.InstagramUsername,
-            tinder_username=row.TinderUsername,
+            username=row.Username if row.Username else None,
+            age=row.Age if row.Age else None,
+            state=row.State if row.State else None,
+            snapchat_username=row.SnapchatUsername if row.SnapchatUsername else None,
+            instagram_username=row.InstagramUsername if row.InstagramUsername else None,
+            tinder_username=row.TinderUsername if row.TinderUsername else None,
             email=row.Email,
-            previously_searched=row.Previously_Searched,
-            is_premium=row.is_premium,
-            searched_count=row.searched_count
+            previously_searched=row.Previously_Searched if row.Previously_Searched else None,
+            is_premium=row.is_premium if row.is_premium is not None else False,
+            searched_count=row.searched_count if row.searched_count is not None else 0
         )
     else:
         raise HTTPException(status_code=404, detail="User profile not found")
