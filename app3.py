@@ -246,16 +246,16 @@ def fetch_user_profile(email: str):
 
         return UserProfileResponse(
             user_id=-1,
-            username=row.Username if row.Username else None,
-            age=row.Age if row.Age else None,
-            state=row.State if row.State else None,
-            snapchat_username=row.SnapchatUsername if row.SnapchatUsername else None,
-            instagram_username=row.InstagramUsername if row.InstagramUsername else None,
-            tinder_username=row.TinderUsername if row.TinderUsername else None,
+            username=row.Username if row.Username else "",
+            age=row.Age if row.Age else "",
+            state=row.State if row.State else "",
+            snapchat_username=row.SnapchatUsername if row.SnapchatUsername else "",
+            instagram_username=row.InstagramUsername if row.InstagramUsername else "",
+            tinder_username=row.TinderUsername if row.TinderUsername else "",
             email=row.Email,
-            previously_searched=row.Previously_Searched if row.Previously_Searched else None,
-            is_premium=row.is_premium if row.is_premium is not None else False,
-            searched_count=row.searched_count if row.searched_count is not None else 0
+            previously_searched=row.Previously_Searched if row.Previously_Searched else "",
+            is_premium=row.is_premium if row.is_premium else False,
+            searched_count=row.searched_count if row.searched_count else 0
         )
     else:
         raise HTTPException(status_code=404, detail="User profile not found")
