@@ -78,6 +78,9 @@ class UserProfileResponse(BaseModel):
     previously_searched: str = None
     is_premium: bool = False
     searched_count: int = 0
+    first_name: str = ""
+    last_name: str = ""
+    phone_number: str = ""
 
 
 class ReportRequest(BaseModel):
@@ -188,7 +191,8 @@ def set_user_profile(user_profile: UserProfileRequest):
         # Insert or update the profile information, including firstName, lastName, and phoneNumber
         cursor.execute("""
             MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source 
+            (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
             ON target.Email = source.Email
             WHEN MATCHED THEN 
                 UPDATE SET 
@@ -205,7 +209,20 @@ def set_user_profile(user_profile: UserProfileRequest):
             WHEN NOT MATCHED THEN
                 INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
                 VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0, source.firstName, source.lastName, source.phoneNumber);  -- Initialize searched_count to 0
-        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, profile_data.first_name, profile_data.last_name, profile_data.phone_number))
+        """, (
+            email, 
+            profile_data.username, 
+            profile_data.age, 
+            profile_data.state, 
+            profile_data.snapchat_username, 
+            profile_data.instagram_username, 
+            profile_data.tinder_username, 
+            profile_data.is_premium, 
+            0,  # This initializes searched_count to 0 if it's a new profile
+            profile_data.first_name, 
+            profile_data.last_name, 
+            profile_data.phone_number
+        ))
         
         conn.commit()
         return {"message": "Profile updated successfully"}
@@ -214,6 +231,7 @@ def set_user_profile(user_profile: UserProfileRequest):
         import traceback
         traceback.print_exc()  # Log the full traceback for better error visibility
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 
 @app.post("/register", response_model=Token)
