@@ -218,6 +218,7 @@ def set_user_profile(user_profile: UserProfileRequest):
             profile_data.instagram_username, 
             profile_data.tinder_username, 
             profile_data.is_premium,
+            0,
             profile_data.first_name,
             profile_data.last_name,
             profile_data.phone_number
