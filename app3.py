@@ -188,15 +188,10 @@ def set_user_profile(user_profile: UserProfileRequest):
         if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Handle potential None values for optional fields
-        snapchat_username = profile_data.snapchat_username if profile_data.snapchat_username is not None else None
-        instagram_username = profile_data.instagram_username if profile_data.instagram_username is not None else None
-        tinder_username = profile_data.tinder_username if profile_data.tinder_username is not None else None
-
         # Insert or update the profile information, including firstName, lastName, and phoneNumber
         cursor.execute("""
             MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source 
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source 
             (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
             ON target.Email = source.Email
             WHEN MATCHED THEN 
@@ -219,13 +214,12 @@ def set_user_profile(user_profile: UserProfileRequest):
             profile_data.username, 
             profile_data.age, 
             profile_data.state, 
-            snapchat_username, 
-            instagram_username, 
-            tinder_username, 
-            profile_data.is_premium, 
-            0,  # This initializes searched_count to 0 if it's a new profile
-            profile_data.first_name, 
-            profile_data.last_name, 
+            profile_data.snapchat_username, 
+            profile_data.instagram_username, 
+            profile_data.tinder_username, 
+            profile_data.is_premium,
+            profile_data.first_name,
+            profile_data.last_name,
             profile_data.phone_number
         ))
         
@@ -236,6 +230,7 @@ def set_user_profile(user_profile: UserProfileRequest):
         import traceback
         traceback.print_exc()  # Log the full traceback for better error visibility
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 
 
