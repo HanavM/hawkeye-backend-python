@@ -57,7 +57,10 @@ class UserProfile(BaseModel):
     snapchat_username: Union[str, None] = None
     instagram_username: Union[str, None] = None
     tinder_username: Union[str, None] = None
-    is_premium: bool = False  # Add is_premium field
+    is_premium: bool = False 
+    first_name: str = ""
+    last_name: str = ""
+    phone_number: str = ""
 
 class UserProfileRequest(BaseModel):
     user: User
@@ -182,10 +185,10 @@ def set_user_profile(user_profile: UserProfileRequest):
         if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Insert or update the profile information, including is_premium and initializing searched_count to 0
+        # Insert or update the profile information, including firstName, lastName, and phoneNumber
         cursor.execute("""
             MERGE INTO UserProfiles AS target
-            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
+            USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
             ON target.Email = source.Email
             WHEN MATCHED THEN 
                 UPDATE SET 
@@ -195,11 +198,14 @@ def set_user_profile(user_profile: UserProfileRequest):
                     SnapchatUsername = source.SnapchatUsername, 
                     InstagramUsername = source.InstagramUsername, 
                     TinderUsername = source.TinderUsername,
-                    is_premium = source.is_premium
+                    is_premium = source.is_premium,
+                    firstName = source.firstName,
+                    lastName = source.lastName,
+                    phoneNumber = source.phoneNumber
             WHEN NOT MATCHED THEN
-                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count)
-                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0);  -- Initialize searched_count to 0
-        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, 0))
+                INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
+                VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0, source.firstName, source.lastName, source.phoneNumber);  -- Initialize searched_count to 0
+        """, (email, profile_data.username, profile_data.age, profile_data.state, profile_data.snapchat_username, profile_data.instagram_username, profile_data.tinder_username, profile_data.is_premium, profile_data.first_name, profile_data.last_name, profile_data.phone_number))
         
         conn.commit()
         return {"message": "Profile updated successfully"}
@@ -208,6 +214,7 @@ def set_user_profile(user_profile: UserProfileRequest):
         import traceback
         traceback.print_exc()  # Log the full traceback for better error visibility
         raise HTTPException(status_code=400, detail=f"Error setting profile: {str(e)}")
+
 
 @app.post("/register", response_model=Token)
 def register_user(user: User):
@@ -231,7 +238,7 @@ def fetch_user_profile(email: str):
     
     query = """
         SELECT UserID, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, Email, 
-               Previously_Searched, is_premium, searched_count
+               Previously_Searched, is_premium, searched_count, firstName, lastName, phoneNumber
         FROM dbo.UserProfiles
         WHERE Email = ?
     """
@@ -240,25 +247,29 @@ def fetch_user_profile(email: str):
     row = cursor.fetchone()
     
     if row:
-        # Handle the case where user_id or other fields might be None
+        # Handle the case where fields might be None
         if row.Username is None:
-            raise HTTPException(status_code=404, detail="User profile not found or missing ID")
+            raise HTTPException(status_code=404, detail="User profile not found or missing username")
 
         return UserProfileResponse(
             user_id=-1,
             username=row.Username if row.Username else "",
-            age=row.Age if row.Age else "",
+            age=row.Age if row.Age else 0,
             state=row.State if row.State else "",
             snapchat_username=row.SnapchatUsername if row.SnapchatUsername else "",
             instagram_username=row.InstagramUsername if row.InstagramUsername else "",
             tinder_username=row.TinderUsername if row.TinderUsername else "",
             email=row.Email,
             previously_searched=row.Previously_Searched if row.Previously_Searched else "",
-            is_premium=row.is_premium if row.is_premium else False,
-            searched_count=row.searched_count if row.searched_count else 0
+            is_premium=row.is_premium if row.is_premium is not None else False,
+            searched_count=row.searched_count if row.searched_count is not None else 0,
+            first_name=row.firstName if row.firstName else "",
+            last_name=row.lastName if row.lastName else "",
+            phone_number=row.phoneNumber if row.phoneNumber else ""
         )
     else:
         raise HTTPException(status_code=404, detail="User profile not found")
+
 
 
 #Reporting routes
