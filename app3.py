@@ -24,6 +24,7 @@ logging.basicConfig(level=logging.INFO)
 
 # JWT Secret Key
 SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
+REFRESH_SECRET_KEY = "0e5faaf7ff563aee3370140cd4c61b78097b700185bb655cda70ff47e83ff2bc88df468885df169dc96e8d84689a037942c5e72517d2ebb71239322789845da0"
 ALGORITHM = "HS256"
 
 connection_string_blob = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
@@ -104,6 +105,32 @@ connection_string = (
 
 app = FastAPI()
 
+def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + expires_delta
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+@app.post("/refresh-token")
+def refresh_token(refresh_token: str):
+    try:
+        # Verify the refresh token
+        payload = jwt.decode(refresh_token, REFRESH_SECRET_KEY, algorithms=[ALGORITHM])
+        user_email = payload.get("sub")
+        if not user_email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Generate a new access token
+        access_token = create_access_token(data={"sub": user_email})
+        return {"access_token": access_token}
+    
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=30)):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
@@ -169,8 +196,15 @@ def login_user(user: User):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error logging in: {str(e)}")
 
-    token = create_access_token(data={"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
+    # Generate access and refresh tokens
+    access_token = create_access_token(data={"sub": user.email})
+    refresh_token = create_refresh_token(data={"sub": user.email})
+    
+    return {
+        "access_token": access_token, 
+        "refresh_token": refresh_token,  # Include refresh token
+        "token_type": "bearer"
+    }
 
 @app.post("/set-profile")
 def set_user_profile(user_profile: UserProfileRequest):
@@ -247,8 +281,15 @@ def register_user(user: User):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error creating user: {str(e)}")
 
-    token = create_access_token(data={"sub": user.email})
-    return {"access_token": token, "token_type": "bearer"}
+    # Generate access and refresh tokens
+    access_token = create_access_token(data={"sub": user.email})
+    refresh_token = create_refresh_token(data={"sub": user.email})
+    
+    return {
+        "access_token": access_token, 
+        "refresh_token": refresh_token,  # Include refresh token
+        "token_type": "bearer"
+    }
 
 
 @app.get("/fetch-user-profile/{email}", response_model=UserProfileResponse)
