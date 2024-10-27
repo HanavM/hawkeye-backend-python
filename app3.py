@@ -44,8 +44,9 @@ class Person(BaseModel):
     last_name: Union[str, None] = None
 
 class User(BaseModel):
-    email: str
-    password: str
+    email: Union[str, None] = None
+    password: Union[str, None] = None
+
 
 class Token(BaseModel):
     access_token: str
@@ -53,20 +54,20 @@ class Token(BaseModel):
     token_type: str
 
 class UserProfile(BaseModel):
-    username: str
-    age: int
-    state: str
+    username: Union[str, None] = None
+    age: Union[int, None] = None
+    state: Union[str, None] = None
     snapchat_username: Union[str, None] = None
     instagram_username: Union[str, None] = None
     tinder_username: Union[str, None] = None
-    is_premium: bool = False
-    first_name: str = ""
-    last_name: str = ""
-    phone_number: str = ""
+    is_premium: Union[bool, None] = None
+    first_name: Union[str, None] = None
+    last_name: Union[str, None] = None
+    phone_number: Union[str, None] = None
 
 class UserProfileRequest(BaseModel):
-    user: User
-    profile: UserProfile
+    user: Union[User, None] = None
+    profile: Union[UserProfile, None] = None
 
 class UserProfileResponse(BaseModel):
     user_id: int
@@ -210,20 +211,28 @@ def login_user(user: User):
 @app.post("/set-profile")
 def set_user_profile(user_profile: UserProfileRequest):
     try:
+        # Check for email in user payload to proceed
+        if not user_profile.user or not user_profile.user.email:
+            raise HTTPException(status_code=422, detail="Email is required.")
+        
         email = user_profile.user.email
-        password = user_profile.user.password
-        profile_data = user_profile.profile
+        password = user_profile.user.password if user_profile.user else None
+        profile_data = user_profile.profile if user_profile.profile else None
         
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Ensure the user exists before setting profile
+        # Ensure the user exists and validate credentials if password is provided
         cursor.execute("SELECT * FROM Users WHERE Email = ?", email)
         db_user = cursor.fetchone()
-        if not db_user or not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
+        
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if password and not bcrypt.checkpw(password.encode('utf-8'), db_user.HashedPassword.encode('utf-8')):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Insert or update the profile information, including firstName, lastName, and phoneNumber
+        # Prepare values for SQL query, using None where fields are missing
         cursor.execute("""
             MERGE INTO UserProfiles AS target
             USING (VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)) AS source 
@@ -245,20 +254,20 @@ def set_user_profile(user_profile: UserProfileRequest):
                 INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
                 VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0, source.firstName, source.lastName, source.phoneNumber);  -- Initialize searched_count to 0
         """, (
-            email, 
-            profile_data.username, 
-            profile_data.age, 
-            profile_data.state, 
-            profile_data.snapchat_username, 
-            profile_data.instagram_username, 
-            profile_data.tinder_username, 
-            profile_data.is_premium,
+            email,
+            profile_data.username if profile_data else None, 
+            profile_data.age if profile_data else None, 
+            profile_data.state if profile_data else None, 
+            profile_data.snapchat_username if profile_data else None, 
+            profile_data.instagram_username if profile_data else None, 
+            profile_data.tinder_username if profile_data else None, 
+            profile_data.is_premium if profile_data else None,
             0,
-            profile_data.first_name,
-            profile_data.last_name,
-            profile_data.phone_number
+            profile_data.first_name if profile_data else None,
+            profile_data.last_name if profile_data else None,
+            profile_data.phone_number if profile_data else None
         ))
-        
+
         conn.commit()
         return {"message": "Profile updated successfully"}
         
