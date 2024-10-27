@@ -59,7 +59,7 @@ class UserProfile(BaseModel):
     snapchat_username: Union[str, None] = None
     instagram_username: Union[str, None] = None
     tinder_username: Union[str, None] = None
-    is_premium: bool = False 
+    is_premium: bool = False
     first_name: str = ""
     last_name: str = ""
     phone_number: str = ""
@@ -231,16 +231,16 @@ def set_user_profile(user_profile: UserProfileRequest):
             ON target.Email = source.Email
             WHEN MATCHED THEN 
                 UPDATE SET 
-                    Username = source.Username, 
-                    Age = source.Age, 
-                    State = source.State, 
-                    SnapchatUsername = source.SnapchatUsername, 
-                    InstagramUsername = source.InstagramUsername, 
-                    TinderUsername = source.TinderUsername,
-                    is_premium = source.is_premium,
-                    firstName = source.firstName,
-                    lastName = source.lastName,
-                    phoneNumber = source.phoneNumber
+                    Username = COALESCE(source.Username, target.Username), 
+                    Age = COALESCE(source.Age, target.Age), 
+                    State = COALESCE(source.State, target.State), 
+                    SnapchatUsername = COALESCE(source.SnapchatUsername, target.SnapchatUsername), 
+                    InstagramUsername = COALESCE(source.InstagramUsername, target.InstagramUsername), 
+                    TinderUsername = COALESCE(source.TinderUsername, target.TinderUsername),
+                    is_premium = COALESCE(source.is_premium, target.is_premium),
+                    firstName = COALESCE(source.firstName, target.firstName),
+                    lastName = COALESCE(source.lastName, target.lastName),
+                    phoneNumber = COALESCE(source.phoneNumber, target.phoneNumber)
             WHEN NOT MATCHED THEN
                 INSERT (Email, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, is_premium, searched_count, firstName, lastName, phoneNumber)
                 VALUES (source.Email, source.Username, source.Age, source.State, source.SnapchatUsername, source.InstagramUsername, source.TinderUsername, source.is_premium, 0, source.firstName, source.lastName, source.phoneNumber);  -- Initialize searched_count to 0
