@@ -2,6 +2,7 @@ import os
 import pyodbc
 import traceback
 import logging
+from typing import Optional
 import jwt
 import bcrypt
 from datetime import datetime, timedelta
@@ -17,7 +18,46 @@ import cv2
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from instagram import Instagram
+from bs4 import BeautifulSoup
 
+def get_display_name(username):
+    # Construct the Snapchat profile URL using the username
+    url = f"https://www.snapchat.com/add/{username}"
+
+    # Headers to mimic a browser request
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+
+    # Sending the request
+    response = requests.get(url, headers=headers)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the HTML content with BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Try to extract the display name using h1
+        display_name = soup.select_one("h1")
+        
+        # Fallback to .Heading_h400Emphasis__SQXxl span if h1 is not found
+        if not display_name:
+            display_name = soup.select_one(".Heading_h400Emphasis__SQXxl span")
+        
+        if display_name:
+            # Get the text and split into first and last name
+            full_name = display_name.get_text().strip()
+            name_parts = full_name.split(" ", 1)  # Split into two parts: first name and last name
+            
+            first_name = name_parts[0]  # First part is the first name
+            last_name = name_parts[1] if len(name_parts) > 1 else ""  # Second part if exists is the last name
+            
+            return first_name, last_name
+        else:
+            return None, None
+    else:
+        return None, None
 
 logging.basicConfig(level=logging.INFO)
 
@@ -350,7 +390,7 @@ async def report_user(
     report_cause: str = Form(...),
     report_description: str = Form(...),
     platform: str = Form(...),
-    video: UploadFile = File(...),
+    video: Optional[UploadFile] = File(None),  # Make video optional
     token: str = Depends(oauth2_scheme)
 ):
     try:
@@ -381,41 +421,63 @@ async def report_user(
         last_name = ""
         if platform == "snapchat":
             try:
-                run_input = {"username": [reported_username]}
-                run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
-                dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
 
-                if not dataset_items:
-                    raise Exception("No data retrieved from Snapchat API")
+                first_name, last_name = get_display_name(reported_username)
+                if (first_name == None):
+                    return {"message": "This account does not exist, the report was not submitted."}
+                # run_input = {"username": [reported_username]}
+                # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
+                # dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
 
-                first_item = dataset_items[0]
-                if first_item and 'result' in first_item:
-                    result = first_item['result'][0]
-                    if result.get("accountType", "") == "no_exist_or_banned":
-                        return {"message": "This account does not exist, the report was not submitted."}
+                # if not dataset_items:
+                #     raise Exception("No data retrieved from Snapchat API")
 
-                    full_name = result.get('name', '')
-                    if full_name:
-                        name_parts = full_name.split(" ")
-                        first_name = name_parts[0]
-                        last_name = name_parts[1] if len(name_parts) > 1 else ""
+                # first_item = dataset_items[0]
+                # if first_item and 'result' in first_item:
+                #     result = first_item['result'][0]
+                #     if result.get("accountType", "") == "no_exist_or_banned":
+                #         return {"message": "This account does not exist, the report was not submitted."}
+
+                #     full_name = result.get('name', '')
+                #     if full_name:
+                #         name_parts = full_name.split(" ")
+                #         first_name = name_parts[0]
+                #         last_name = name_parts[1] if len(name_parts) > 1 else ""
             except Exception as e:
                 print(f"Error retrieving data from Snapchat API: {str(e)}")
                 # Fallback: assume account exists if API fails
                 print("Assuming Snapchat account exists due to API failure")
+        
+        if platform == "instagram":
+            try:
+                profile_data = Instagram.scrap(reported_username)
+                profile_data = json.loads(profile_data)
+                full_name = profile_data["full_name"]
+                if full_name:
+                    name_parts = full_name.split(" ")
+                    first_name = name_parts[0]
+                    last_name = name_parts[1] if len(name_parts) > 1 else ""
+            except Exception as e:
+                return {"message": "This account does not exist, the report was not submitted."}
 
-        # Step 5: Ensure the directory for video files exists
-        video_dir = "temp_videos"
-        if not os.path.exists(video_dir):
-            os.makedirs(video_dir)
 
-        # Step 6: Save the video locally
-        video_path = f"{video_dir}/{reported_username}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
-        with open(video_path, "wb") as f:
-            f.write(await video.read())
+        # Step 5: Ensure the directory for video files exists if video is provided
+        video_path = None
+        if video:
+            video_dir = "temp_videos"
+            if not os.path.exists(video_dir):
+                os.makedirs(video_dir)
 
-        # Step 7: Extract text from the video frames
-        extracted_text = process_video(video_path, frame_interval=120)
+            # Step 6: Save the video locally
+            video_path = f"{video_dir}/{reported_username}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.mp4"
+            with open(video_path, "wb") as f:
+                f.write(await video.read())
+
+            # Step 7: Extract text from the video frames
+            extracted_text = process_video(video_path, frame_interval=120)
+
+        else:
+            extracted_text = ""  # If no video, no text extraction is done
 
         # Step 8: Prepare the report data
         report_data = {
@@ -430,13 +492,14 @@ async def report_user(
             "last_name": last_name
         }
 
-        # Step 9: Upload report data and video to Azure Blob Storage
-        with open(video_path, "rb") as video_file:
-            upload_report_to_blob(report_data, video_file)
+        # Step 9: Upload report data and video to Azure Blob Storage if video exists
+        if video_path:
+            with open(video_path, "rb") as video_file:
+                upload_report_to_blob(report_data, video_file)
 
-        # Clean up: Remove the local video file after upload
-        if os.path.exists(video_path):
-            os.remove(video_path)
+            # Clean up: Remove the local video file after upload
+            if os.path.exists(video_path):
+                os.remove(video_path)
 
         return {"message": "Report has been submitted for validation"}
 

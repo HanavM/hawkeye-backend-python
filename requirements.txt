@@ -39,3 +39,4 @@ python-multipart==0.0.5
 selenium==3.141.0
 fake-headers==1.0.2
 webdriver_manager==3.2.2
+beautifulsoup4==4.12.0
