@@ -496,10 +496,11 @@ async def report_user(
         if video_path:
             with open(video_path, "rb") as video_file:
                 upload_report_to_blob(report_data, video_file)
-
             # Clean up: Remove the local video file after upload
             if os.path.exists(video_path):
                 os.remove(video_path)
+        else:
+            upload_report_to_blob_without_video(report_data)
 
         return {"message": "Report has been submitted for validation"}
 
@@ -1210,6 +1211,24 @@ def upload_report_to_blob(report_data, video_file):
         video_blob = blob_service_client.get_blob_client(container=container_name, blob=video_filename)
         video_blob.upload_blob(video_file, overwrite=True, content_settings=ContentSettings(content_type="video/mp4"))
         print(f"Video uploaded: {video_filename}")
+
+        print("Report uploaded successfully!")
+
+    except Exception as e:
+        print(f"Error uploading report: {str(e)}")
+
+def upload_report_to_blob_without_video(report_data):
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        folder_name = f"{report_data['reported_username']}_{timestamp}"
+
+        # Upload metadata (JSON)
+        metadata_filename = f"{folder_name}/metadata.json"
+        metadata_blob = blob_service_client.get_blob_client(container=container_name, blob=metadata_filename)
+        metadata_json = json.dumps(report_data, indent=4)
+        metadata_blob.upload_blob(metadata_json, overwrite=True, content_settings=ContentSettings(content_type="application/json"))
+        print(f"Metadata uploaded: {metadata_filename}")
+
 
         print("Report uploaded successfully!")
 
