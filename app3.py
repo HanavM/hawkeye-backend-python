@@ -786,7 +786,21 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             previously_searched = user_profile[0].split(',') if user_profile[0] else []
 
             # Check if the username|platform combo already exists
-            search_entry = f"{reported_username}|{platform}"
+
+
+            #right here chatgpt!!
+            # search_entry = f"{reported_username}|{platform}"
+            cursor.execute(f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName FROM {table_name} WHERE Username = ?", reported_username)
+            name_row = cursor.fetchone()
+
+            if name_row:
+                reported_firstname, reported_lastname = name_row[0], name_row[1]
+            else:
+                reported_firstname, reported_lastname = "Unknown", "Unknown"
+
+            # Update the search entry with the fetched first name and last name
+            search_entry = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}"
+
             if search_entry in previously_searched:
                 previously_searched.remove(search_entry)
 
@@ -807,7 +821,19 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
         else:
             # If the user hasn't searched before, start with the current search and set the searched_count to 1
-            updated_searched = f"{reported_username}|{platform}"
+
+            cursor.execute(f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName FROM {table_name} WHERE Username = ?", reported_username)
+            name_row = cursor.fetchone()
+
+            if name_row:
+                reported_firstname, reported_lastname = name_row[0], name_row[1]
+            else:
+                reported_firstname, reported_lastname = "Unknown", "Unknown"
+
+            # Update the search entry with the fetched first name and last name
+            updated_searched = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}"
+
+            # updated_searched = f"{reported_username}|{platform}"
             searched_count = 1
 
             # Update the Previously_Searched and searched_count fields in the database
@@ -834,22 +860,36 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
             # Split the previously searched string into an array
             previously_searched_raw = user_profile[0].split(',')
 
-            # Create a list to store previously searched usernames along with their platforms
+            # Create a list to store previously searched entries
             previously_searched = []
 
             for search_item in previously_searched_raw:
-                # Check if the stored value contains both the username and the platform
-                if '|' in search_item:
-                    username, platform = search_item.split('|')
+                # Check if the stored value contains all parts: username, platform, first name, last name
+                parts = search_item.split('|')
+                if len(parts) == 4:
+                    username, platform, first_name, last_name = parts
                     previously_searched.append({
                         "username": username,
-                        "platform": platform
+                        "platform": platform,
+                        "first_name": first_name,
+                        "last_name": last_name
+                    })
+                elif len(parts) == 2:
+                    # Handle older entries with just username and platform
+                    username, platform = parts
+                    previously_searched.append({
+                        "username": username,
+                        "platform": platform,
+                        "first_name": "Unknown",
+                        "last_name": "Unknown"
                     })
                 else:
-                    # If the platform is missing (for older entries), default to "unknown"
+                    # Handle incomplete or invalid entries
                     previously_searched.append({
-                        "username": search_item,
-                        "platform": "unknown"
+                        "username": parts[0],
+                        "platform": "unknown",
+                        "first_name": "Unknown",
+                        "last_name": "Unknown"
                     })
         else:
             previously_searched = []
