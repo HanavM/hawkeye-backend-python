@@ -778,6 +778,15 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
                 "Report_Description": report.Report_Description
             })
 
+        # Retrieve first name and last name of the reported user
+        cursor.execute(f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName FROM {table_name} WHERE Username = ?", reported_username)
+        name_row = cursor.fetchone()
+
+        if name_row:
+            reported_firstname, reported_lastname = name_row[0], name_row[1]
+        else:
+            reported_firstname, reported_lastname = "Unknown", "Unknown"
+
         # Fetch the user's profile to update the Previously_Searched field and increment searched_count
         cursor.execute("SELECT Previously_Searched, searched_count FROM UserProfiles WHERE Email = ?", user_email)
         user_profile = cursor.fetchone()
@@ -786,21 +795,7 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             previously_searched = user_profile[0].split(',') if user_profile[0] else []
 
             # Check if the username|platform combo already exists
-
-
-            #right here chatgpt!!
-            # search_entry = f"{reported_username}|{platform}"
-            cursor.execute(f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName FROM {table_name} WHERE Username = ?", reported_username)
-            name_row = cursor.fetchone()
-
-            if name_row:
-                reported_firstname, reported_lastname = name_row[0], name_row[1]
-            else:
-                reported_firstname, reported_lastname = "Unknown", "Unknown"
-
-            # Update the search entry with the fetched first name and last name
             search_entry = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}"
-
             if search_entry in previously_searched:
                 previously_searched.remove(search_entry)
 
@@ -821,19 +816,7 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
         else:
             # If the user hasn't searched before, start with the current search and set the searched_count to 1
-
-            cursor.execute(f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName FROM {table_name} WHERE Username = ?", reported_username)
-            name_row = cursor.fetchone()
-
-            if name_row:
-                reported_firstname, reported_lastname = name_row[0], name_row[1]
-            else:
-                reported_firstname, reported_lastname = "Unknown", "Unknown"
-
-            # Update the search entry with the fetched first name and last name
             updated_searched = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}"
-
-            # updated_searched = f"{reported_username}|{platform}"
             searched_count = 1
 
             # Update the Previously_Searched and searched_count fields in the database
@@ -841,10 +824,16 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
         conn.commit()
 
-        return {"reports": reports_data}
+        # Include the first name and last name in the response
+        return {
+            "reports": reports_data,
+            "reported_user_firstname": reported_firstname,
+            "reported_user_lastname": reported_lastname
+        }
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error retrieving reports: {str(e)}")
+
 
 @app.get("/getPreviouslySearched", dependencies=[Depends(get_current_user)])
 def get_previously_searched(user_email: str = Depends(get_current_user)):
