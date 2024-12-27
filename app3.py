@@ -173,10 +173,12 @@ def refresh_token(refresh_token: str):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 
-def create_access_token(data: dict, expires_delta: timedelta = timedelta(minutes=30)):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
-    expire = datetime.utcnow() + expires_delta
-    to_encode.update({"exp": expire})
+    if expires_delta:  # Add expiration if a timedelta is provided
+        expire = datetime.utcnow() + expires_delta
+        to_encode.update({"exp": expire})
+    # Otherwise, do not include the "exp" claim, making the token never expire
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
