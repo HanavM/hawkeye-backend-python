@@ -422,11 +422,12 @@ async def report_user(
         first_name = ""
         last_name = ""
         if platform == "snapchat":
-            try:
-
-                first_name, last_name = get_display_name(reported_username)
-                if (first_name == None):
-                    raise HTTPException(status_code=400, detail=f"Username does not exist")
+            first_name, last_name = get_display_name(reported_username)
+            if (first_name):
+                pass
+            else:
+                raise HTTPException(status_code=400, detail=f"Username does not exist")
+                return "did not work"
                 # run_input = {"username": [reported_username]}
                 # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
                 # dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
@@ -445,10 +446,6 @@ async def report_user(
                 #         name_parts = full_name.split(" ")
                 #         first_name = name_parts[0]
                 #         last_name = name_parts[1] if len(name_parts) > 1 else ""
-            except Exception as e:
-                print(f"Error retrieving data from Snapchat API: {str(e)}")
-                # Fallback: assume account exists if API fails
-                print("Assuming Snapchat account exists due to API failure")
         
         if platform == "instagram":
             try:
