@@ -46,9 +46,9 @@ first_name, last_name = get_display_name(username)
 
 print(first_name == None, last_name == "")
 
-# if first_name:
-#     print(f"First Name: {first_name}")
-#     if last_name:
-#         print(f"Last Name: {last_name}")
-# else:
-#     print("Display name not found.")
+if first_name:
+    print(f"First Name: {first_name}")
+    if last_name:
+        print(f"Last Name: {last_name}")
+else:
+    print("Display name not found.")

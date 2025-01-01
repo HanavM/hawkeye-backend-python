@@ -426,7 +426,7 @@ async def report_user(
 
                 first_name, last_name = get_display_name(reported_username)
                 if (first_name == None):
-                    return {"message": "This account does not exist, the report was not submitted."}
+                    raise HTTPException(status_code=400, detail=f"Username does not exist")
                 # run_input = {"username": [reported_username]}
                 # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
                 # dataset_items = client.dataset(run['defaultDatasetId']).list_items().items

@@ -2,7 +2,7 @@ from instagram import Instagram
 import json
 
 try:
-    profile_data = Instagram.scrap('varundangeti')
+    profile_data = Instagram.scrap('ksivaspams')
     profile_data = json.loads(profile_data)
     # print(profile_data)
     full_name = profile_data["full_name"]
