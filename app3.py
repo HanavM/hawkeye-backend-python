@@ -426,7 +426,7 @@ async def report_user(
             if (first_name):
                 pass
             else:
-                raise HTTPException(status_code=400, detail=f"Username does not exist")
+                raise HTTPException(status_code=300, detail=f"Username does not exist")
                 return "did not work"
                 # run_input = {"username": [reported_username]}
                 # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
