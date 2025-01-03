@@ -19,6 +19,7 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from instagram import Instagram
 from bs4 import BeautifulSoup
+from fastapi.responses import JSONResponse
 
 def get_display_name(username):
     # Construct the Snapchat profile URL using the username
@@ -424,7 +425,7 @@ async def report_user(
         if platform == "snapchat":
             first_name, last_name = get_display_name(reported_username)
             if not first_name:
-                raise HTTPException(status_code=404, detail="Username does not exist")
+                return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
                 return "did not work"
                 # run_input = {"username": [reported_username]}
                 # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
