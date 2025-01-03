@@ -125,6 +125,7 @@ class UserProfileResponse(BaseModel):
     first_name: str = ""
     last_name: str = ""
     phone_number: str = ""
+    is_premium_fixed: bool  # New field
 
 
 class ReportRequest(BaseModel):
