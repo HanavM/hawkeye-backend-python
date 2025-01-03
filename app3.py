@@ -620,6 +620,11 @@ def report_user_admin(blob_entry_name: str = Form(...)):
                     last_name = name_parts[1] if len(name_parts) > 1 else ""
             except Exception as e:
                 return {"message": "This account does not exist, the report was not submitted."}
+        elif platform == "snapchat":
+            first_name, last_name = get_display_name(reported_username)
+            if not first_name:
+                return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
+
 
         logging.info(f"Table determined: {table_name}")
 
