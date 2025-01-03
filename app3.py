@@ -423,10 +423,8 @@ async def report_user(
         last_name = ""
         if platform == "snapchat":
             first_name, last_name = get_display_name(reported_username)
-            if (first_name):
-                pass
-            else:
-                raise HTTPException(status_code=300, detail=f"Username does not exist")
+            if not first_name:
+                raise HTTPException(status_code=404, detail="Username does not exist")
                 return "did not work"
                 # run_input = {"username": [reported_username]}
                 # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
@@ -457,6 +455,7 @@ async def report_user(
                     first_name = name_parts[0]
                     last_name = name_parts[1] if len(name_parts) > 1 else ""
             except Exception as e:
+                raise HTTPException(status_code=404, detail="Username does not exist")
                 return {"message": "This account does not exist, the report was not submitted."}
 
 
