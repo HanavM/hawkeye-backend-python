@@ -149,6 +149,11 @@ connection_string = (
 
 app = FastAPI()
 
+@app.get("/health-check")
+def health_check():
+    return {"status": "success", "message": "Server is reachable"}
+
+
 def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
