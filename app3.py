@@ -349,17 +349,17 @@ def register_user(user: User):
 def fetch_user_profile(email: str):
     conn = get_conn()
     cursor = conn.cursor()
-    
+
     query = """
         SELECT UserID, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, Email, 
-               Previously_Searched, is_premium, searched_count, firstName, lastName, phoneNumber
+               Previously_Searched, is_premium, searched_count, firstName, lastName, phoneNumber, isPremiumFixed
         FROM dbo.UserProfiles
         WHERE Email = ?
     """
-    
+
     cursor.execute(query, email)
     row = cursor.fetchone()
-    
+
     if row:
         # Handle the case where fields might be None
         if row.Username is None:
@@ -379,10 +379,12 @@ def fetch_user_profile(email: str):
             searched_count=row.searched_count if row.searched_count is not None else 0,
             first_name=row.firstName if row.firstName else "",
             last_name=row.lastName if row.lastName else "",
-            phone_number=row.phoneNumber if row.phoneNumber else ""
+            phone_number=row.phoneNumber if row.phoneNumber else "",
+            is_premium_fixed=row.isPremiumFixed if row.isPremiumFixed is not None else False  # New field
         )
     else:
         raise HTTPException(status_code=404, detail="User profile not found")
+
 
 
 
