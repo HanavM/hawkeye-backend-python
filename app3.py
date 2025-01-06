@@ -470,7 +470,7 @@ async def report_user(
         if platform == "instagram":
             first_name_temp, last_name_temp, error = get_full_name_instagram(reported_username)
             if error:
-                return JSONResponse(status_code=404, content={"detail": "Username does not exist. Platform:" + platform + ", Username: " + reported_username + ", firstname: " + first_name_temp + ", lastname: " + last_name_temp + ", error: " + error})
+                return JSONResponse(status_code=404, content={"detail": f"Username does not exist. Platform: {str(platform)}, Username: {str(reported_username)}, firstname: {str(first_name_temp)}, lastname: {str(last_name_temp)}, error: {str(error)}"})
             else:
                 first_name = first_name_temp
                 last_name = last_name_temp
