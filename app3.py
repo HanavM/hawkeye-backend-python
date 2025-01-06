@@ -20,6 +20,9 @@ from azure.storage.blob import BlobServiceClient, ContentSettings
 from instagram import Instagram
 from bs4 import BeautifulSoup
 from fastapi.responses import JSONResponse
+import instaloader
+
+
 
 def get_display_name(username):
     # Construct the Snapchat profile URL using the username
@@ -59,6 +62,30 @@ def get_display_name(username):
             return None, None
     else:
         return None, None
+
+def get_full_name_instagram(username):
+    L = instaloader.Instaloader()
+    
+    try:
+        # Load the profile from the username
+        profile = instaloader.Profile.from_username(L.context, username)
+        
+        # Extract full name and split into first and last name
+        full_name = profile.full_name.strip()
+        name_parts = full_name.split(' ', 1)
+        
+        if len(name_parts) > 1:
+            first_name, last_name = name_parts
+        else:
+            first_name, last_name = name_parts[0], ''
+        
+        return first_name, last_name, None  # No error
+    except instaloader.exceptions.ProfileNotExistsException:
+        return None, None, "Error: Username not found."
+    except instaloader.exceptions.ConnectionException:
+        return None, None, "Error: Unable to connect to Instagram. Please try again later."
+    except Exception as e:
+        return None, None, f"Error: An unexpected error occurred - {str(e)}"
 
 logging.basicConfig(level=logging.INFO)
 
@@ -134,7 +161,7 @@ class ReportRequest(BaseModel):
     report_description: str
     platform: str  # Add platform field here
 
-#edf
+
 # Update the connection string with the new admin username and password
 connection_string = (
     "Driver={ODBC Driver 18 for SQL Server};"
@@ -148,6 +175,8 @@ connection_string = (
 )
 
 app = FastAPI()
+
+#basic routes
 
 @app.get("/health-check")
 def health_check():
@@ -425,47 +454,26 @@ async def report_user(
         platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
-            raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
+            raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat' or 'instagram'.")
 
         # Step 4: Handle Snapchat API validation with fallback if API fails
         first_name = ""
         last_name = ""
         if platform == "snapchat":
-            first_name, last_name = get_display_name(reported_username)
-            if not first_name:
+            first_name_temp, last_name_temp = get_display_name(reported_username)
+            if not first_name_temp:
                 return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
-                return "did not work"
-                # run_input = {"username": [reported_username]}
-                # run = client.actor("VqN0mxdFMwxVabq1T").call(run_input=run_input)
-                # dataset_items = client.dataset(run['defaultDatasetId']).list_items().items
+            first_name = first_name_temp
+            last_name = last_name_temp
 
-                # if not dataset_items:
-                #     raise Exception("No data retrieved from Snapchat API")
-
-                # first_item = dataset_items[0]
-                # if first_item and 'result' in first_item:
-                #     result = first_item['result'][0]
-                #     if result.get("accountType", "") == "no_exist_or_banned":
-                #         return {"message": "This account does not exist, the report was not submitted."}
-
-                #     full_name = result.get('name', '')
-                #     if full_name:
-                #         name_parts = full_name.split(" ")
-                #         first_name = name_parts[0]
-                #         last_name = name_parts[1] if len(name_parts) > 1 else ""
         
         if platform == "instagram":
-            try:
-                profile_data = Instagram.scrap(reported_username)
-                profile_data = json.loads(profile_data)
-                full_name = profile_data["full_name"]
-                if full_name:
-                    name_parts = full_name.split(" ")
-                    first_name = name_parts[0]
-                    last_name = name_parts[1] if len(name_parts) > 1 else ""
-            except Exception as e:
-                raise HTTPException(status_code=404, detail="Username does not exist")
-                return {"message": "This account does not exist, the report was not submitted."}
+            first_name_temp, last_name_temp, error = get_full_name_instagram(reported_username)
+            if error:
+                return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
+            else:
+                first_name = first_name_temp
+                last_name = last_name_temp
 
 
         # Step 5: Ensure the directory for video files exists if video is provided
@@ -606,25 +614,27 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             first_name_field = "Tinder_Account_FirstName"
             last_name_field = "Tinder_Account_LastName"
             foreign_key_column = "TinderUserID"
+
+
+
         if first_name == "":
             first_name = ""
             last_name = ""
             if platform == "instagram":
-                try:
-                    profile_data = Instagram.scrap(reported_username)
-                    profile_data = json.loads(profile_data)
-                    full_name = profile_data["full_name"]
-                    if full_name:
-                        name_parts = full_name.split(" ")
-                        first_name = name_parts[0]
-                        last_name = name_parts[1] if len(name_parts) > 1 else ""
-                except Exception as e:
-                    return {"message": "This account does not exist, the report was not submitted."}
-            elif platform == "snapchat":
-                first_name, last_name = get_display_name(reported_username)
-                if not first_name:
+                first_name_temp, last_name_temp, error = get_full_name_instagram(reported_username)
+                if error:
                     return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
+                else:
+                    first_name = first_name_temp
+                    last_name = last_name_temp
 
+
+            elif platform == "snapchat":
+                first_name_temp, last_name_temp = get_display_name(reported_username)
+                if not first_name_temp:
+                    return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
+                first_name = first_name_temp
+                last_name = last_name_temp
 
         logging.info(f"Table determined: {table_name}")
 
