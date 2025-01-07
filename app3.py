@@ -65,8 +65,10 @@ def get_display_name(username):
 
 def get_full_name_instagram(username):
     L = instaloader.Instaloader()
-    
     try:
+        # Login using a stored session or credentials
+        L.login('hawkeyeapp_official', 'imreportingyouonhawkeye')  # Use environment variables for security
+        
         # Load the profile from the username
         profile = instaloader.Profile.from_username(L.context, username)
         
@@ -79,7 +81,7 @@ def get_full_name_instagram(username):
         else:
             first_name, last_name = name_parts[0], ''
         
-        return first_name, last_name, None  # No error
+        return first_name, last_name, None
     except instaloader.exceptions.ProfileNotExistsException:
         return None, None, "Error: Username not found."
     except instaloader.exceptions.ConnectionException:
