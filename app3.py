@@ -482,8 +482,8 @@ async def report_user(
                 
                 first_name = first_name_temp
                 last_name = last_name_temp
-            except:
-                return JSONResponse(status_code=404, content={"detail": "Username does not exist instagram"})
+            except Exception as e:
+                return JSONResponse(status_code=404, content={"detail": f"Username does not exist instagram, error: {e}"})
 
 
 
