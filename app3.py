@@ -22,16 +22,20 @@ from bs4 import BeautifulSoup
 from fastapi.responses import JSONResponse
 import instaloader
 
-
 def download_session_from_blob():
     """Downloads the Instagram session file from Azure Blob Storage"""
     try:
-        blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
-        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME_IG, blob=BLOB_NAME_IG)
+        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
+        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=BLOB_NAME)
 
-        # Download the session file and save it locally
-        with open("/tmp/sessionfile", "wb") as download_file:
+        # Download the session file
+        local_path = "/tmp/sessionfile"
+        with open(local_path, "wb") as download_file:
             download_file.write(blob_client.download_blob().readall())
+
+        # Verify if the file exists
+        if not os.path.exists(local_path):
+            raise HTTPException(status_code=500, detail="Session file not downloaded successfully.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download session file: {str(e)}")
 
@@ -112,7 +116,7 @@ def get_full_name_instagram_2(username, proxy):
     try:
         # Download and load the session file
         download_session_from_blob()
-        L.load_session_from_file('hawkeyeapp_official', '/tmp/sessionfile')
+        L.load_session_from_file('hawkeyeapp_official', './sessionfile')
 
         # Fetch the Instagram profile data
         profile = instaloader.Profile.from_username(L.context, username)
@@ -322,7 +326,16 @@ def root():
     return {"message": "Person API root"}
 
 # instagram script
+def test_proxy(proxy):
+    try:
+        response = requests.get("https://httpbin.org/ip", proxies={"http": proxy, "https": proxy})
+        return response.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy test failed: {str(e)}")
 
+@app.post("/test_proxy")
+def proxy_test(request: UsernameRequest):
+    return test_proxy(request.proxy)
 
 
 
