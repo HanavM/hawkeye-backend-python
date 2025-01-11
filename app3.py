@@ -23,6 +23,18 @@ from fastapi.responses import JSONResponse
 import instaloader
 
 
+def download_session_from_blob():
+    """Downloads the Instagram session file from Azure Blob Storage"""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
+        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME_IG, blob=BLOB_NAME_IG)
+
+        # Download the session file and save it locally
+        with open("/tmp/sessionfile", "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download session file: {str(e)}")
+
 
 def get_display_name(username):
     # Construct the Snapchat profile URL using the username
@@ -91,19 +103,25 @@ def get_full_name_instagram(username):
         return None, None, f"Error: An unexpected error occurred - {str(e)}"
 
 def get_full_name_instagram_2(username, proxy):
+    """Fetches the full name from Instagram using a proxy and session"""
     L = instaloader.Instaloader()
 
-    # Set the proxy without authentication (IP only)
+    # Set the proxy for the Instaloader instance
     L.context.proxy = proxy
 
     try:
-        # Load the profile from the username using the proxy
+        # Download and load the session file
+        download_session_from_blob()
+        L.load_session_from_file('hawkeyeapp_official', '/tmp/sessionfile')
+
+        # Fetch the Instagram profile data
         profile = instaloader.Profile.from_username(L.context, username)
         
-        # Extract full name and split into first and last name
+        # Extract and split the full name
         full_name = profile.full_name.strip()
         name_parts = full_name.split(' ', 1)
         
+        # Split first and last name or assign blank if missing
         if len(name_parts) > 1:
             first_name, last_name = name_parts
         else:
@@ -131,6 +149,8 @@ container_name = "reports-to-be-validated"
 subscription_key = os.getenv("AZURE_SUBSCRIPTION_KEY")
 ocr_endpoint = "https://hawkeye-cv-test2-hanavmodasiya.cognitiveservices.azure.com/vision/v3.2/ocr"
 frame_output_dir = "frames"
+CONTAINER_NAME_IG = "instagram-sessions"
+BLOB_NAME_IG = "sessionfile"
 
 blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
 
@@ -219,6 +239,7 @@ def health_check():
 
 @app.post("/get_instagram_name")
 def get_instagram_name(request: UsernameRequest):
+    """API endpoint to fetch Instagram name using the provided username and proxy"""
     first_name, last_name, error = get_full_name_instagram_2(request.username, request.proxy)
     if error:
         raise HTTPException(status_code=400, detail=error)
