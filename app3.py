@@ -90,6 +90,34 @@ def get_full_name_instagram(username):
     except Exception as e:
         return None, None, f"Error: An unexpected error occurred - {str(e)}"
 
+def get_full_name_instagram_2(username, proxy):
+    L = instaloader.Instaloader()
+
+    # Set the proxy without authentication (IP only)
+    L.context.proxy = proxy
+
+    try:
+        # Load the profile from the username using the proxy
+        profile = instaloader.Profile.from_username(L.context, username)
+        
+        # Extract full name and split into first and last name
+        full_name = profile.full_name.strip()
+        name_parts = full_name.split(' ', 1)
+        
+        if len(name_parts) > 1:
+            first_name, last_name = name_parts
+        else:
+            first_name, last_name = name_parts[0], ''
+        
+        return first_name, last_name, None  # No error
+    except instaloader.exceptions.ProfileNotExistsException:
+        return None, None, "Error: Username not found."
+    except instaloader.exceptions.ConnectionException:
+        return None, None, "Error: Unable to connect to Instagram. Please try again later."
+    except Exception as e:
+        return None, None, f"Error: An unexpected error occurred - {str(e)}"
+
+
 logging.basicConfig(level=logging.INFO)
 
 
@@ -178,7 +206,9 @@ connection_string = (
     "TrustServerCertificate=no;"
     "Connection Timeout=30;"
 )
-
+class UsernameRequest(BaseModel):
+    username: str
+    proxy: str
 app = FastAPI()
 
 #basic routes
@@ -187,13 +217,13 @@ app = FastAPI()
 def health_check():
     return {"status": "success", "message": "Server is reachable"}
 
-
 @app.post("/get_instagram_name")
-def get_instagram_name(username: str):
-    first_name, last_name, error = get_full_name_instagram(username)
+def get_instagram_name(request: UsernameRequest):
+    first_name, last_name, error = get_full_name_instagram_2(request.username, request.proxy)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"first_name": first_name, "last_name": last_name}
+
 
 def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
     to_encode = data.copy()
