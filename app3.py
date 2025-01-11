@@ -119,6 +119,8 @@ class User(BaseModel):
     password: Union[str, None] = None
 
 
+
+
 class Token(BaseModel):
     access_token: str
     refresh_token: str
@@ -185,6 +187,13 @@ app = FastAPI()
 def health_check():
     return {"status": "success", "message": "Server is reachable"}
 
+
+@app.post("/get_instagram_name")
+def get_instagram_name(username: str):
+    first_name, last_name, error = get_full_name_instagram(username)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return {"first_name": first_name, "last_name": last_name}
 
 def create_refresh_token(data: dict, expires_delta: timedelta = timedelta(days=7)):
     to_encode = data.copy()
