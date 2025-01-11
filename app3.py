@@ -65,14 +65,15 @@ def get_display_name(username):
 
 def get_full_name_instagram(username):
     L = instaloader.Instaloader()
+
+    # Set the proxy without authentication (IP only)
+    L.context.proxy = "http://161.97.136.251:3128"
+
     try:
-        # Load the stored session file instead of using plaintext credentials
-        L.load_session_from_file('hawkeyeapp_official', '/home/site/wwwroot/instaloader_cookies/session-hawkeyeapp_official')
-        
-        # Load the profile from the provided Instagram username
+        # Load the profile from the username using the proxy
         profile = instaloader.Profile.from_username(L.context, username)
         
-        # Extract the full name and split it into first and last names
+        # Extract full name and split into first and last name
         full_name = profile.full_name.strip()
         name_parts = full_name.split(' ', 1)
         
@@ -81,7 +82,7 @@ def get_full_name_instagram(username):
         else:
             first_name, last_name = name_parts[0], ''
         
-        return first_name, last_name, None  # Return the names with no error
+        return first_name, last_name, None  # No error
     except instaloader.exceptions.ProfileNotExistsException:
         return None, None, "Error: Username not found."
     except instaloader.exceptions.ConnectionException:
