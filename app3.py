@@ -116,7 +116,7 @@ def get_full_name_instagram_2(username, proxy):
     try:
         # Download and load the session file
         download_session_from_blob()
-        L.load_session_from_file('hawkeyeapp_official', './sessionfile')
+        L.load_session_from_file('hawkeyeapp_official', '/tmp/sessionfile')
 
         # Fetch the Instagram profile data
         profile = instaloader.Profile.from_username(L.context, username)
