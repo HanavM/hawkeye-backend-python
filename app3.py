@@ -93,10 +93,16 @@ def get_full_name_instagram_with_cookies(username, proxy):
 
         # Test if the cookies work
         profile = instaloader.Profile.from_username(L.context, username)
+        
+        # Extract and split the full name
         full_name = profile.full_name.strip()
         name_parts = full_name.split(' ', 1)
         
-        first_name, last_name = (name_parts + [''])[:2]
+        # Split first and last name or assign blank if missing
+        if len(name_parts) > 1:
+            first_name, last_name = name_parts
+        else:
+            first_name, last_name = name_parts[0], ''
         return first_name, last_name, None
     except instaloader.exceptions.ProfileNotExistsException:
         return None, None, "Error: Username not found."
