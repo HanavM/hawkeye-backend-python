@@ -123,8 +123,10 @@ def get_full_name_instagram_with_cookies(username, proxy):
         # Apply only valid cookies for login
         L.context._session.cookies.update(cookies)
         
-        # Validate login with a test request
-        response = L.context.get_json("accounts/edit/?__a=1")
+        # ✅ Fixed: Added an empty dictionary for 'params'
+        response = L.context.get_json("accounts/edit/?__a=1", params={})
+        
+        # Ensure successful authentication
         if "status" not in response or response["status"] != "ok":
             raise HTTPException(status_code=401, detail="Invalid cookies. Please regenerate.")
 
@@ -142,6 +144,10 @@ def get_full_name_instagram_with_cookies(username, proxy):
     except instaloader.exceptions.LoginRequiredException:
         return None, None, "Error: Cookies are expired or invalid. Please refresh them."
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return None, None, f"Error: {str(e)}"
+
         import traceback
         traceback.print_exc()
         return None, None, f"Error: {str(e)}"
