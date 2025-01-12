@@ -47,16 +47,34 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
 def download_cookies_from_blob():
-    """Download the Instagram cookies JSON file from Azure Blob Storage"""
+    """Downloads the Instagram cookies JSON file from Azure Blob Storage"""
     try:
         blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
         blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME_IG, blob="instagram_cookies.json")
 
-        # Download cookies as a JSON file
-        with open("/tmp/instagram_cookies.json", "wb") as download_file:
-            download_file.write(blob_client.download_blob().readall())
+        # Download full content (no partial range requests)
+        with open("/tmp/instagram_cookies.json", "wb") as file:
+            file.write(blob_client.download_blob().readall())
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download cookies: {str(e)}")
+
+def load_cookies():
+    """Loads and converts cookies from JSON file"""
+    try:
+        with open("/tmp/instagram_cookies.json", "r") as file:
+            cookies = json.load(file)
+
+            # Convert list of cookies into a dictionary
+            if isinstance(cookies, list):
+                cookies_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
+            elif isinstance(cookies, dict):
+                cookies_dict = cookies
+            else:
+                raise ValueError("Invalid cookie format detected.")
+
+            return cookies_dict
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing cookies: {str(e)}")
 
 def download_session_from_blob():
     """Downloads the Instagram session file from Azure Blob Storage"""
@@ -76,22 +94,19 @@ def download_session_from_blob():
         raise HTTPException(status_code=500, detail=f"Failed to download session file: {str(e)}")
 
 def get_full_name_instagram_with_cookies(username, proxy):
-    """Fetch full name from Instagram using cookies instead of a session file"""
+    """Fetches full name using Instagram cookies"""
     L = instaloader.Instaloader()
     L.context.proxy = proxy
 
     try:
-        # Download the cookies file from Azure Blob Storage
+        # Download and load the cookies
         download_cookies_from_blob()
-        
-        # Load cookies from JSON file
-        with open("/tmp/instagram_cookies.json", "r") as file:
-            cookies = json.load(file)
+        cookies = load_cookies()
 
-        # Apply cookies directly to the Instaloader context
+        # Apply cookies to the session for authentication
         L.context._session.cookies.update(cookies)
 
-        # Test if the cookies work
+        # Test the profile access
         profile = instaloader.Profile.from_username(L.context, username)
         
         # Extract and split the full name
@@ -109,6 +124,8 @@ def get_full_name_instagram_with_cookies(username, proxy):
     except instaloader.exceptions.ConnectionException:
         return None, None, "Error: Unable to connect to Instagram. Please try again later."
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return None, None, f"Error: {str(e)}"
 
 def get_display_name(username):
@@ -293,6 +310,7 @@ def health_check():
 
 @app.post("/get_instagram_name")
 def get_instagram_name(request: UsernameRequest):
+    """FastAPI endpoint to fetch Instagram profile data"""
     first_name, last_name, error = get_full_name_instagram_with_cookies(request.username, request.proxy)
     if error:
         raise HTTPException(status_code=400, detail=error)
