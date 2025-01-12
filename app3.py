@@ -136,7 +136,7 @@ def get_full_name_instagram_2(username, proxy):
     L = instaloader.Instaloader()
 
     # Set the proxy for the Instaloader instance
-    L.context.proxy = proxy
+    L.context.proxy = None
 
     try:
         # Download and load the session file
