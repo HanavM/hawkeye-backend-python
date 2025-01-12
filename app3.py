@@ -46,6 +46,17 @@ client = ApifyClient("apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
+def download_cookies_from_blob():
+    """Download the Instagram cookies JSON file from Azure Blob Storage"""
+    try:
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
+        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME_IG, blob="instagram_cookies.json")
+
+        # Download cookies as a JSON file
+        with open("/tmp/instagram_cookies.json", "wb") as download_file:
+            download_file.write(blob_client.download_blob().readall())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download cookies: {str(e)}")
 
 def download_session_from_blob():
     """Downloads the Instagram session file from Azure Blob Storage"""
@@ -64,6 +75,35 @@ def download_session_from_blob():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to download session file: {str(e)}")
 
+def get_full_name_instagram_with_cookies(username, proxy):
+    """Fetch full name from Instagram using cookies instead of a session file"""
+    L = instaloader.Instaloader()
+    L.context.proxy = proxy
+
+    try:
+        # Download the cookies file from Azure Blob Storage
+        download_cookies_from_blob()
+        
+        # Load cookies from JSON file
+        with open("/tmp/instagram_cookies.json", "r") as file:
+            cookies = json.load(file)
+
+        # Apply cookies directly to the Instaloader context
+        L.context._session.cookies.update(cookies)
+
+        # Test if the cookies work
+        profile = instaloader.Profile.from_username(L.context, username)
+        full_name = profile.full_name.strip()
+        name_parts = full_name.split(' ', 1)
+        
+        first_name, last_name = (name_parts + [''])[:2]
+        return first_name, last_name, None
+    except instaloader.exceptions.ProfileNotExistsException:
+        return None, None, "Error: Username not found."
+    except instaloader.exceptions.ConnectionException:
+        return None, None, "Error: Unable to connect to Instagram. Please try again later."
+    except Exception as e:
+        return None, None, f"Error: {str(e)}"
 
 def get_display_name(username):
     # Construct the Snapchat profile URL using the username
@@ -247,8 +287,7 @@ def health_check():
 
 @app.post("/get_instagram_name")
 def get_instagram_name(request: UsernameRequest):
-    """API endpoint to fetch Instagram name using the provided username and proxy"""
-    first_name, last_name, error = get_full_name_instagram_2(request.username, request.proxy)
+    first_name, last_name, error = get_full_name_instagram_with_cookies(request.username, request.proxy)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return {"first_name": first_name, "last_name": last_name}
