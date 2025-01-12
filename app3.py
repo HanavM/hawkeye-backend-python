@@ -48,50 +48,50 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def download_cookies_from_blob():
     """Downloads the full Instagram cookies JSON file from Azure Blob Storage"""
-
     try:
         blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
         blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME_IG, blob="instagram_cookies.json")
 
-        # Download the entire file (no partial content)
+        # Download the entire file
         with open("/tmp/instagram_cookies.json", "wb") as file:
             stream = blob_client.download_blob()
             file.write(stream.readall())
 
         # Confirm file integrity
-        print(f"✅ Cookies downloaded. File Size: {os.path.getsize('/tmp/instagram_cookies.json')} bytes")
-
-        # Verify if the file is empty
         if os.path.getsize("/tmp/instagram_cookies.json") == 0:
             raise HTTPException(status_code=500, detail="Downloaded cookies file is empty!")
+        
+        print(f"✅ Cookies downloaded successfully. File Size: {os.path.getsize('/tmp/instagram_cookies.json')} bytes")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error downloading cookies from blob storage: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error downloading cookies from Azure Blob: {str(e)}")
 
 def load_cookies():
-    """Loads and verifies the essential Instagram cookies from JSON."""
+    """Loads and verifies essential Instagram cookies from the downloaded JSON file."""
     try:
         with open("/tmp/instagram_cookies.json", "r") as file:
             cookies = json.load(file)
 
-            # Convert list to dictionary if needed
+            # Convert the list of cookies to a usable dictionary format
             if isinstance(cookies, list):
                 cookies_dict = {cookie["name"]: cookie["value"] for cookie in cookies}
             elif isinstance(cookies, dict):
                 cookies_dict = cookies
             else:
-                raise ValueError("Invalid cookie format.")
+                raise ValueError("Invalid cookie format detected.")
 
-            # Check for required cookies
+            # Check for the presence of essential cookies
             required_cookies = ["sessionid", "csrftoken", "ds_user_id"]
             for cookie in required_cookies:
                 if cookie not in cookies_dict:
-                    raise ValueError(f"Missing required cookie: {cookie}")
+                    raise ValueError(f"❌ Missing required cookie: {cookie}")
 
+            print("✅ All essential cookies are present.")
             return cookies_dict
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing cookies: {str(e)}")
+
 
 def download_session_from_blob():
     """Downloads the Instagram session file from Azure Blob Storage"""
@@ -111,43 +111,41 @@ def download_session_from_blob():
         raise HTTPException(status_code=500, detail=f"Failed to download session file: {str(e)}")
 
 def get_full_name_instagram_with_cookies(username, proxy):
-    """Fetch full name using Instagram cookies"""
+    """Fetch full name using Instagram cookies with error handling and safer requests"""
     L = instaloader.Instaloader()
     L.context.proxy = proxy
 
     try:
-        # Download and load the cookies
+        # ✅ Step 1: Download and Load Cookies
         download_cookies_from_blob()
         cookies = load_cookies()
 
-        # Apply only valid cookies for login
+        # ✅ Step 2: Apply the cookies to the session
         L.context._session.cookies.update(cookies)
-        
-        # ✅ Fixed: Added an empty dictionary for 'params'
-        response = L.context.get_json("accounts/edit/?__a=1", params={})
-        
-        # Ensure successful authentication
-        if "status" not in response or response["status"] != "ok":
-            raise HTTPException(status_code=401, detail="Invalid cookies. Please regenerate.")
 
-        # Fetch the profile
+        # ✅ Step 3: Safer authentication check using a minimal endpoint
+        # Avoids infinite redirects by testing a simpler API endpoint
+        response = L.context.get_json("accounts/current_user/?__a=1", params={})
+
+        if "status" not in response or response["status"] != "ok":
+            raise HTTPException(status_code=401, detail="Invalid cookies provided. Please regenerate and re-upload them.")
+
+        # ✅ Step 4: Fetch the profile
         profile = instaloader.Profile.from_username(L.context, username)
         full_name = profile.full_name.strip()
         name_parts = full_name.split(' ', 1)
         
         first_name, last_name = (name_parts + [''])[:2]
+        print(f"✅ Successfully retrieved profile for {username}.")
         return first_name, last_name, None
+
     except instaloader.exceptions.ProfileNotExistsException:
         return None, None, "Error: Username not found."
     except instaloader.exceptions.ConnectionException:
         return None, None, "Error: Unable to connect to Instagram. Please try again later."
     except instaloader.exceptions.LoginRequiredException:
-        return None, None, "Error: Cookies are expired or invalid. Please refresh them."
+        return None, None, "Error: Cookies expired or invalid."
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return None, None, f"Error: {str(e)}"
-
         import traceback
         traceback.print_exc()
         return None, None, f"Error: {str(e)}"
@@ -334,6 +332,7 @@ def health_check():
 
 @app.post("/get_instagram_name")
 def get_instagram_name(request: UsernameRequest):
+    """Endpoint for fetching Instagram profile information."""
     first_name, last_name, error = get_full_name_instagram_with_cookies(request.username, request.proxy)
     if error:
         raise HTTPException(status_code=400, detail=error)
