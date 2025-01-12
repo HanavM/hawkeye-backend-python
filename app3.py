@@ -22,11 +22,36 @@ from bs4 import BeautifulSoup
 from fastapi.responses import JSONResponse
 import instaloader
 
+
+logging.basicConfig(level=logging.INFO)
+
+
+# JWT Secret Key
+SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
+REFRESH_SECRET_KEY = "0e5faaf7ff563aee3370140cd4c61b78097b700185bb655cda70ff47e83ff2bc88df468885df169dc96e8d84689a037942c5e72517d2ebb71239322789845da0"
+ALGORITHM = "HS256"
+
+connection_string_blob = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+container_name = "reports-to-be-validated"
+subscription_key = os.getenv("AZURE_SUBSCRIPTION_KEY")
+ocr_endpoint = "https://hawkeye-cv-test2-hanavmodasiya.cognitiveservices.azure.com/vision/v3.2/ocr"
+frame_output_dir = "frames"
+CONTAINER_NAME_IG = "instagram-sessions"
+BLOB_NAME_IG = "sessionfile"
+
+blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
+
+client = ApifyClient("apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+
 def download_session_from_blob():
     """Downloads the Instagram session file from Azure Blob Storage"""
     try:
-        blob_service_client = BlobServiceClient.from_connection_string(AZURE_STORAGE_CONNECTION_STRING)
-        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME, blob=BLOB_NAME)
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
+        blob_client = blob_service_client.get_blob_client(container=CONTAINER_NAME_IG, blob=BLOB_NAME_IG)
 
         # Download the session file
         local_path = "/tmp/sessionfile"
@@ -140,27 +165,6 @@ def get_full_name_instagram_2(username, proxy):
         return None, None, f"Error: An unexpected error occurred - {str(e)}"
 
 
-logging.basicConfig(level=logging.INFO)
-
-
-# JWT Secret Key
-SECRET_KEY = "43581f2ce3c30dac3191986e251dba7a8802ad7aa73641265d14744b24f18bdc"
-REFRESH_SECRET_KEY = "0e5faaf7ff563aee3370140cd4c61b78097b700185bb655cda70ff47e83ff2bc88df468885df169dc96e8d84689a037942c5e72517d2ebb71239322789845da0"
-ALGORITHM = "HS256"
-
-connection_string_blob = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
-container_name = "reports-to-be-validated"
-subscription_key = os.getenv("AZURE_SUBSCRIPTION_KEY")
-ocr_endpoint = "https://hawkeye-cv-test2-hanavmodasiya.cognitiveservices.azure.com/vision/v3.2/ocr"
-frame_output_dir = "frames"
-CONTAINER_NAME_IG = "instagram-sessions"
-BLOB_NAME_IG = "sessionfile"
-
-blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
-
-client = ApifyClient("apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me")
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 class Person(BaseModel):
     first_name: str
