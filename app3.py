@@ -563,7 +563,7 @@ def register_user(user: User):
         "access_token": access_token, 
         "refresh_token": refresh_token,  # Include refresh token
         "token_type": "bearer"
-    }
+    } 
 
 class VerifyEmailRequest(BaseModel):
     token: str
