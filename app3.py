@@ -21,6 +21,8 @@ from instagram import Instagram
 from bs4 import BeautifulSoup
 from fastapi.responses import JSONResponse
 import instaloader
+import mailtrap as mt
+import secrets
 
 
 logging.basicConfig(level=logging.INFO)
@@ -529,7 +531,12 @@ def register_user(user: User):
     try:
         conn = get_conn()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO Users (Email, HashedPassword) VALUES (?, ?)", user.email, hashed_password)
+        verification_token = secrets.token_urlsafe(32)
+        last_verification_code_date = datetime.now()
+        cursor.execute("""
+            INSERT INTO Users (Email, HashedPassword, last_verification_code, last_verification_code_date) 
+            VALUES (?, ?, ?, ?)
+        """, (user.email, hashed_password, verification_token, last_verification_code_date))
         conn.commit()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error creating user: {str(e)}")
@@ -537,13 +544,79 @@ def register_user(user: User):
     # Generate access and refresh tokens
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_refresh_token(data={"sub": user.email})
-    
+
+    verification_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/verify-email?token={verification_token}"
+    mail = mt.Mail(
+        sender=mt.Address(email="noresponse@demomailtrap.com", name="Mailtrap Test"),
+        to=[mt.Address(email= user.email)],
+        subject="Email verification",
+        text=f"Click the link below to verify your email:\n{verification_url}",
+        category="Email Verification Test",
+    )
+
+    client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
+    response = client.send(mail)
+
+    print(response)
+
     return {
         "access_token": access_token, 
         "refresh_token": refresh_token,  # Include refresh token
         "token_type": "bearer"
     }
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+@app.get("/verify-email")
+def verify_email(query_params: VerifyEmailRequest):
+    token = query_params.token  # Access the token from the Pydantic model
+    
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is missing")
+    
+    try:
+        # Connect to the database
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Look up the user by verification token
+        cursor.execute("""
+            SELECT Email, last_verification_code, is_verified, last_verification_code_date 
+            FROM Users 
+            WHERE last_verification_code = ?
+        """, (token,))
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid token")
+
+        # Check if the token has expired (using last_verification_code_date)
+        token_created_at = user[3]  # last_verification_code_date is the 4th field in the query
+        token_age = datetime.now() - token_created_at
+        
+        if token_age > timedelta(hours=24):  # Set token expiration period to 24 hours
+            raise HTTPException(status_code=400, detail="Token has expired")
+
+        # If the token is valid and not expired, mark the email as verified
+        if user[2] == 1:  # Check if is_verified is already True (1)
+            return {"message": "Email is already verified"}
+
+        # Update the user's verification status
+        cursor.execute("""
+            UPDATE Users 
+            SET is_verified = ? 
+            WHERE last_verification_code = ?
+        """, (1, token))  # 1 for True
+        conn.commit()
+
+        # Optionally, redirect the user to a confirmation page (this is optional)
+        # return RedirectResponse(url="https://yourdomain.com/verification-success")
+
+        return {"message": "Email verified successfully!"}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error verifying email: {str(e)}")
 
 @app.get("/fetch-user-profile/{email}", response_model=UserProfileResponse)
 def fetch_user_profile(email: str):
