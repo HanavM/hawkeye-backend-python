@@ -21,7 +21,7 @@ from instagram import Instagram
 from bs4 import BeautifulSoup
 from fastapi.responses import JSONResponse
 import instaloader
-import mailtrap as mt
+# import mailtrap as mt
 import secrets
 
 
