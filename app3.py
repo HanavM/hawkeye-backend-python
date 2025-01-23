@@ -546,18 +546,18 @@ def register_user(user: User):
     refresh_token = create_refresh_token(data={"sub": user.email})
 
     verification_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/verify-email?token={verification_token}"
-    mail = mt.Mail(
-        sender=mt.Address(email="noresponse@demomailtrap.com", name="Mailtrap Test"),
-        to=[mt.Address(email= user.email)],
-        subject="Email verification",
-        text=f"Click the link below to verify your email:\n{verification_url}",
-        category="Email Verification Test",
-    )
+    # mail = mt.Mail(
+    #     sender=mt.Address(email="noresponse@demomailtrap.com", name="Mailtrap Test"),
+    #     to=[mt.Address(email= user.email)],
+    #     subject="Email verification",
+    #     text=f"Click the link below to verify your email:\n{verification_url}",
+    #     category="Email Verification Test",
+    # )
 
-    client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
-    response = client.send(mail)
+    # client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
+    # response = client.send(mail)
 
-    print(response) 
+    # print(response) 
 
     return {
         "access_token": access_token, 
