@@ -20,8 +20,8 @@ while (True):
             last_name = name_parts[1] if len(name_parts) > 1 else ""
         print(first_name + " xxx " + last_name)
         print("im right herererer")
-    except:
-        print("well account doesnt exist")
+    except Exception as e:
+        print(f"well account doesnt exist {e}")
 # print(profile_data)
 # print(profile_data)
 # print(profile_data["full_name"])
