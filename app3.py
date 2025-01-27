@@ -554,7 +554,7 @@ def register_user(user: User):
             category="Email Verification Test",
         )
 
-        client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
+        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
         response = client.send(mail)
     except Exception as e:
         return JSONResponse(status_code=404, content={"detail": f"Username does not exist: {e}"})
@@ -651,7 +651,7 @@ def request_account_deletion(user_email: str = Depends(get_current_user)):
             category="Account Deletion"
         )
 
-        client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
+        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
         response = client.send(mail)
 
         print(response)
