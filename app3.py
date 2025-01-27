@@ -618,6 +618,97 @@ def verify_email(query_params: VerifyEmailRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error verifying email: {str(e)}")
 
+class DeleteAccountRequest(BaseModel):
+    token: str
+
+@app.post("/request-account-deletion", dependencies=[Depends(get_current_user)])
+def request_account_deletion(user_email: str = Depends(get_current_user)):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Generate verification token and store it
+        deletion_token = secrets.token_urlsafe(32)
+        deletion_token_date = datetime.now()
+        
+        cursor.execute("""
+            UPDATE Users 
+            SET last_verification_code_delete = ?, last_verification_code_delete_date = ?
+            WHERE Email = ?
+        """, (deletion_token, deletion_token_date, user_email))
+        conn.commit()
+
+        # Generate verification link
+        deletion_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/delete-account?token={deletion_token}"
+
+        # Send email
+        mail = mt.Mail(
+            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Support"),
+            to=[mt.Address(email=user_email)],
+            subject="Account Deletion Request",
+            text=f"Click the link below to confirm account deletion:\n{deletion_url}",
+            category="Account Deletion"
+        )
+
+        client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
+        response = client.send(mail)
+
+        print(response)
+
+        return {"message": "Deletion email sent successfully. Please check your inbox."}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error requesting account deletion: {str(e)}")
+
+@app.get("/delete-account")
+def delete_account(query_params: DeleteAccountRequest):
+    token = query_params.token  # Extract token from request
+
+    if not token:
+        raise HTTPException(status_code=400, detail="Token is missing")
+
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+
+        # Verify token
+        cursor.execute("""
+            SELECT Email, last_verification_code_delete, last_verification_code_delete_date 
+            FROM Users 
+            WHERE last_verification_code_delete = ?
+        """, (token,))
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+        # Check token expiration
+        token_created_at = user[2]
+        token_age = datetime.now() - token_created_at
+
+        if token_age > timedelta(hours=24):
+            raise HTTPException(status_code=400, detail="Token has expired")
+
+        # Delete the user account
+        cursor.execute("""
+            DELETE FROM Users 
+            WHERE Email = ?
+        """, (user[0],))
+        conn.commit()
+
+        cursor.execute("""
+            DELETE FROM UserProfiles 
+            WHERE Email = ?
+        """, (user[0],))
+        conn.commit()
+        return {"message": "Your account has been successfully deleted."}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting account: {str(e)}")
+
+
+
+
 @app.get("/fetch-user-profile/{email}", response_model=UserProfileResponse)
 def fetch_user_profile(email: str):
     conn = get_conn()
