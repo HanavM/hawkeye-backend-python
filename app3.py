@@ -557,7 +557,7 @@ def register_user(user: User):
     # client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
     # response = client.send(mail)
 
-    # print(response) 
+    # print(response) ddd
 
     return {
         "access_token": access_token, #dfsdf
