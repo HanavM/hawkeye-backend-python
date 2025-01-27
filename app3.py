@@ -547,9 +547,9 @@ def register_user(user: User):
     try:
         verification_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/verify-email?token={verification_token}"
         mail = mt.Mail(
-            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Mailtrap Test"),
+            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Support"),
             to=[mt.Address(email= user.email)],
-            subject="Email verification",
+            subject="Verify your email",
             text=f"Click the link below to verify your email:\n{verification_url}",
             category="Email Verification Test",
         )
