@@ -582,7 +582,7 @@ def verify_email(query_params: VerifyEmailRequest):
 
         # Look up the user by verification token
         cursor.execute("""
-            SELECT Email, last_verification_code, is_verified, last_verification_code_date 
+            SELECT Email, last_verification_code, last_verification_code_date 
             FROM Users 
             WHERE last_verification_code = ?
         """, (token,))
@@ -592,22 +592,22 @@ def verify_email(query_params: VerifyEmailRequest):
             raise HTTPException(status_code=400, detail="Invalid token")
 
         # Check if the token has expired (using last_verification_code_date)
-        token_created_at = user[3]  # last_verification_code_date is the 4th field in the query
+        token_created_at = user[2]  # last_verification_code_date is the 4th field in the query
         token_age = datetime.now() - token_created_at
         
         if token_age > timedelta(hours=24):  # Set token expiration period to 24 hours
             raise HTTPException(status_code=400, detail="Token has expired")
 
-        # If the token is valid and not expired, mark the email as verified
-        if user[2] == 1:  # Check if is_verified is already True (1)
-            return {"message": "Email is already verified"}
+        # # If the token is valid and not expired, mark the email as verified
+        # if user[2] == 1:  # Check if is_verified is already True (1)
+        #     return {"message": "Email is already verified"}
 
-        # Update the user's verification status
+
         cursor.execute("""
-            UPDATE Users 
+            UPDATE UserProfiles 
             SET is_verified = ? 
-            WHERE last_verification_code = ?
-        """, (1, token))  # 1 for True
+            WHERE Email = ?
+        """, (1, user[0])) 
         conn.commit()
 
         # Optionally, redirect the user to a confirmation page (this is optional)
