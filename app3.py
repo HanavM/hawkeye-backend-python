@@ -570,9 +570,7 @@ class VerifyEmailRequest(BaseModel):
     token: str
 
 @app.get("/verify-email")
-def verify_email(query_params: VerifyEmailRequest):
-    token = query_params.token  # Access the token from the Pydantic model
-    
+def verify_email(token: str = Query(..., description="Verification token")):
     if not token:
         raise HTTPException(status_code=400, detail="Token is missing")
     
@@ -599,11 +597,7 @@ def verify_email(query_params: VerifyEmailRequest):
         if token_age > timedelta(hours=24):  # Set token expiration period to 24 hours
             raise HTTPException(status_code=400, detail="Token has expired")
 
-        # # If the token is valid and not expired, mark the email as verified
-        # if user[2] == 1:  # Check if is_verified is already True (1)
-        #     return {"message": "Email is already verified"}
-
-
+        # Mark the email as verified
         cursor.execute("""
             UPDATE UserProfiles 
             SET is_verified = ? 
@@ -611,14 +605,10 @@ def verify_email(query_params: VerifyEmailRequest):
         """, (1, user[0])) 
         conn.commit()
 
-        # Optionally, redirect the user to a confirmation page (this is optional)
-        # return RedirectResponse(url="https://yourdomain.com/verification-success")
-
         return {"message": "Email verified successfully!"}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error verifying email: {str(e)}")
-
 class DeleteAccountRequest(BaseModel):
     token: str
 
