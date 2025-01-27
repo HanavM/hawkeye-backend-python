@@ -560,7 +560,7 @@ def register_user(user: User):
     # print(response) 
 
     return {
-        "access_token": access_token, 
+        "access_token": access_token, #dfsdf
         "refresh_token": refresh_token,  # Include refresh token
         "token_type": "bearer"
     } 
