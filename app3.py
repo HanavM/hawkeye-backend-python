@@ -544,19 +544,20 @@ def register_user(user: User):
     # Generate access and refresh tokens
     access_token = create_access_token(data={"sub": user.email})
     refresh_token = create_refresh_token(data={"sub": user.email})
+    try:
+        verification_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/verify-email?token={verification_token}"
+        mail = mt.Mail(
+            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Mailtrap Test"),
+            to=[mt.Address(email= user.email)],
+            subject="Email verification",
+            text=f"Click the link below to verify your email:\n{verification_url}",
+            category="Email Verification Test",
+        )
 
-    verification_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/verify-email?token={verification_token}"
-    mail = mt.Mail(
-        sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Mailtrap Test"),
-        to=[mt.Address(email= user.email)],
-        subject="Email verification",
-        text=f"Click the link below to verify your email:\n{verification_url}",
-        category="Email Verification Test",
-    )
-
-    client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
-    response = client.send(mail)
-
+        client = mt.MailtrapClient(token="21c159c61ee1a211d7a3ad93602be796")
+        response = client.send(mail)
+    except Exception as e:
+        return JSONResponse(status_code=404, content={"detail": f"Username does not exist: {e}"})
     print(response)
 
     return {
