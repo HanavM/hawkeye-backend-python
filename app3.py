@@ -15,7 +15,7 @@ import requests
 from apify_client import ApifyClient
 import json
 import cv2
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
 from azure.storage.blob import BlobServiceClient, ContentSettings
 from instagram import Instagram
 from bs4 import BeautifulSoup
