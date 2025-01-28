@@ -652,9 +652,7 @@ def request_account_deletion(user_email: str = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Error requesting account deletion: {str(e)}")
 
 @app.get("/delete-account")
-def delete_account(query_params: DeleteAccountRequest):
-    token = query_params.token  # Extract token from request
-
+def delete_account(token: str = Query(..., description="Verification token for account deletion")):
     if not token:
         raise HTTPException(status_code=400, detail="Token is missing")
 
@@ -692,6 +690,7 @@ def delete_account(query_params: DeleteAccountRequest):
             WHERE Email = ?
         """, (user[0],))
         conn.commit()
+
         return {"message": "Your account has been successfully deleted."}
 
     except Exception as e:
