@@ -567,6 +567,43 @@ def register_user(user: User):
         "token_type": "bearer"
     } 
 
+@app.post("/send-email-verification", dependencies=[Depends(get_current_user)])
+def send_email_verification(user_email: str = Depends(get_current_user)):
+    try:
+        conn = get_conn()
+        cursor = conn.cursor()
+        verification_token = secrets.token_urlsafe(32)
+        last_verification_code_date = datetime.now()
+
+        # Update the existing user's verification code and date
+        cursor.execute("""
+            UPDATE Users 
+            SET last_verification_code = ?, last_verification_code_date = ? 
+            WHERE Email = ?
+        """, (verification_token, last_verification_code_date, user_email))
+        conn.commit()
+
+        try:
+            verification_url = f"https://hawkeye-backend-python-test2-hwfugva4aacwhggz.westus-01.azurewebsites.net/verify-email?token={verification_token}"
+            mail = mt.Mail(
+                sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Support"),
+                to=[mt.Address(email=user_email)],
+                subject="Verify your email",
+                text=f"Click the link below to verify your email:\n{verification_url}",
+                category="Email Verification Test",
+            )
+
+            client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+            response = client.send(mail)
+        except Exception as e:
+            return JSONResponse(status_code=404, content={"detail": f"Failed to send email: {e}"})
+
+        return {"message": "Verification email sent successfully. Please check your inbox."}
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error sending verification email: {str(e)}")
+
+
 class VerifyEmailRequest(BaseModel):
     token: str
 
