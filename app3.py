@@ -301,6 +301,7 @@ class UserProfileResponse(BaseModel):
     last_name: str = ""
     phone_number: str = ""
     is_premium_fixed: bool  # New field
+    is_verified: bool
 
 
 class ReportRequest(BaseModel):
@@ -706,7 +707,7 @@ def fetch_user_profile(email: str):
 
     query = """
         SELECT UserID, Username, Age, State, SnapchatUsername, InstagramUsername, TinderUsername, Email, 
-               Previously_Searched, is_premium, searched_count, firstName, lastName, phoneNumber, isPremiumFixed
+               Previously_Searched, is_premium, searched_count, firstName, lastName, phoneNumber, isPremiumFixed, is_verified
         FROM dbo.UserProfiles
         WHERE Email = ?
     """
@@ -734,7 +735,8 @@ def fetch_user_profile(email: str):
             first_name=row.firstName if row.firstName else "",
             last_name=row.lastName if row.lastName else "",
             phone_number=row.phoneNumber if row.phoneNumber else "",
-            is_premium_fixed=row.isPremiumFixed if row.isPremiumFixed is not None else False  # New field
+            is_premium_fixed=row.isPremiumFixed if row.isPremiumFixed is not None else False,  # New field
+            is_verified = row.is_verified if row.is_verified is not None else False
         )
     else:
         raise HTTPException(status_code=404, detail="User profile not found")
