@@ -605,7 +605,7 @@ def verify_email(token: str = Query(..., description="Verification token")):
         """, (1, user[0])) 
         conn.commit()
 
-        return {"message": "Email verified successfully!"}
+        return {"message": "Email verified successfully! Reload the Hawkeye App to see updates."}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error verifying email: {str(e)}")
