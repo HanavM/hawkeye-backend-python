@@ -1662,7 +1662,7 @@ def upload_report_to_blob(report_data, video_file):
         
         mail = mt.Mail(
             sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
-            to=[mt.Address(email="")],
+            to=[mt.Address(email="hawkeyereportapp@gmail.com")],
             subject="Report to be verified",
             text=f"A report was submitted.\nName: {folder_name}",
             category="Report Uploaded",
