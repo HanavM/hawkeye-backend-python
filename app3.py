@@ -944,6 +944,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         report_description = blob_metadata.get("report_description")
         platform = blob_metadata.get("platform")
         reporter_username = blob_metadata.get("reporter_username")
+        reporter_email = blob_metadata.get("reporter_email")
         extracted_text_list = blob_metadata.get("extracted_text")
         first_name = blob_metadata.get("first_name")
         last_name = blob_metadata.get("last_name")
@@ -1101,13 +1102,96 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         
         logging.info(f"Blob entry {blob_entry_name} deleted successfully.")
         
+
+        mail = mt.Mail(
+            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
+            to=[mt.Address(email=reporter_email)],
+            subject="Report to be verified",
+            text=f"""Your report was accepted.\nReport:
+            \nUsername: {reported_username}
+            \nPlatform: {platform}
+            \nCause: {report_cause}
+            \nDescription: {report_description}
+            """,
+            category="Report Accepted",
+        )
+
+        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        response = client.send(mail)
+
+
         return {"message": "Report submitted successfully and blob entry deleted.", "Report ID": report_id}
 
     except Exception as e:
         logging.error(f"Error submitting report: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
+@app.post("/rejectReportAdmin")
+def reject_report_admin(blob_entry_name: str = Form(...)):
+    try:
+        logging.info(f"Received request to process blob entry: {blob_entry_name}")
 
+        # Validate input early
+        if not blob_entry_name:
+            logging.error("Input error: Blob entry name is missing")
+            raise HTTPException(status_code=400, detail="Blob entry name is required")
+        blob_entry_name = blob_entry_name.strip()
+
+        # Step 1: Access the blob metadata
+        container_name = "reports-to-be-validated"
+        logging.info(f"Attempting to access blob in container {container_name} with entry name {blob_entry_name}")
+        logging.info(f"Blob entry to be fetched: '{blob_entry_name}'")
+
+        blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name + "/metadata.json")
+        
+        if not blob_client.exists():
+            logging.error(f"Blob entry {blob_entry_name} not found")
+            raise HTTPException(status_code=404, detail="Blob entry not found")
+        
+        logging.info(f"Blob entry {blob_entry_name} found. Fetching metadata.")
+        
+        # Fetch metadata from the blob
+        blob_metadata = blob_client.download_blob().readall()
+        blob_metadata = json.loads(blob_metadata.decode('utf-8'))  # Convert byte data to JSON
+
+        # Ensure metadata is present
+        if not blob_metadata:
+            logging.error(f"Metadata for blob entry {blob_entry_name} is missing")
+            raise HTTPException(status_code=400, detail="Metadata is missing for the specified blob entry")
+
+        logging.info(f"Blob metadata retrieved: {blob_metadata}")
+
+        # Extract necessary fields from metadata
+        reported_username = blob_metadata.get("reported_username")
+        report_cause = blob_metadata.get("report_cause")
+        report_description = blob_metadata.get("report_description")
+        platform = blob_metadata.get("platform")
+        reporter_username = blob_metadata.get("reporter_username")
+        reporter_email = blob_metadata.get("reporter_email")
+        extracted_text_list = blob_metadata.get("extracted_text")
+        first_name = blob_metadata.get("first_name")
+        last_name = blob_metadata.get("last_name")
+
+
+        mail = mt.Mail(
+            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
+            to=[mt.Address(email=reporter_email)],
+            subject="Report to be verified",
+            text=f"""Your report was rejected.\nReport:
+            \nUsername: {reported_username}
+            \nPlatform: {platform}
+            \nCause: {report_cause}
+            \nDescription: {report_description}
+            """,
+            category="Report Rejected",
+        )
+
+        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        response = client.send(mail)
+
+    except Exception as e:
+        logging.error(f"Error submitting report: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 
 
