@@ -880,6 +880,7 @@ async def report_user(
             "platform": platform.capitalize(),
             "extracted_text": extracted_text,
             "reporter_username": reporter_username,
+            "reporter_email": reporter_email,
             "first_name": first_name,
             "last_name": last_name
         }
