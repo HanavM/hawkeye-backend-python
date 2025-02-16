@@ -893,6 +893,7 @@ async def report_user(
                 os.remove(video_path)
         else:
             upload_report_to_blob_without_video(report_data)
+        
 
         return {"message": "Report has been submitted for validation"}
 
@@ -1658,7 +1659,17 @@ def upload_report_to_blob(report_data, video_file):
         print(f"Video uploaded: {video_filename}")
 
         print("Report uploaded successfully!")
+        
+        mail = mt.Mail(
+            sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
+            to=[mt.Address(email="")],
+            subject="Report to be verified",
+            text=f"A report was submitted.\nName: {folder_name}",
+            category="Report Uploaded",
+        )
 
+        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        response = client.send(mail)
     except Exception as e:
         print(f"Error uploading report: {str(e)}")
 
