@@ -1106,7 +1106,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         mail = mt.Mail(
             sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
             to=[mt.Address(email=reporter_email)],
-            subject="Report to be verified",
+            subject="Report Accepted",
             text=f"""Your report was accepted.\nReport:
             \nUsername: {reported_username}
             \nPlatform: {platform}
@@ -1127,7 +1127,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         raise HTTPException(status_code=400, detail=f"Error submitting report: {str(e)}")
 
 @app.post("/rejectReportAdmin")
-def reject_report_admin(blob_entry_name: str = Form(...)):
+def reject_report_admin(blob_entry_name: str = Form(...), description: str = Form(...)):
     try:
         logging.info(f"Received request to process blob entry: {blob_entry_name}")
 
@@ -1140,8 +1140,7 @@ def reject_report_admin(blob_entry_name: str = Form(...)):
         # Step 1: Access the blob metadata
         container_name = "reports-to-be-validated"
         logging.info(f"Attempting to access blob in container {container_name} with entry name {blob_entry_name}")
-        logging.info(f"Blob entry to be fetched: '{blob_entry_name}'")
-
+        
         blob_client = blob_service_client.get_blob_client(container_name, blob_entry_name + "/metadata.json")
         
         if not blob_client.exists():
@@ -1164,30 +1163,31 @@ def reject_report_admin(blob_entry_name: str = Form(...)):
         # Extract necessary fields from metadata
         reported_username = blob_metadata.get("reported_username")
         report_cause = blob_metadata.get("report_cause")
-        report_description = blob_metadata.get("report_description")
         platform = blob_metadata.get("platform")
-        reporter_username = blob_metadata.get("reporter_username")
         reporter_email = blob_metadata.get("reporter_email")
-        extracted_text_list = blob_metadata.get("extracted_text")
-        first_name = blob_metadata.get("first_name")
-        last_name = blob_metadata.get("last_name")
 
-
+        # Construct email message with description parameter included
         mail = mt.Mail(
             sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
             to=[mt.Address(email=reporter_email)],
-            subject="Report to be verified",
-            text=f"""Your report was rejected.\nReport:
+            subject="Report Rejected",
+            text=f"""Your report was rejected.
+            \nWhy was it rejected:
+            {description}
+            \nReport:
             \nUsername: {reported_username}
             \nPlatform: {platform}
             \nCause: {report_cause}
-            \nDescription: {report_description}
             """,
             category="Report Rejected",
         )
 
+        # Send email using Mailtrap client (replace with your actual email client configuration)
         client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
         response = client.send(mail)
+
+        # Return a success message
+        return {"message": "Email sent successfully"}
 
     except Exception as e:
         logging.error(f"Error submitting report: {str(e)}")
