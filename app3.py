@@ -28,7 +28,7 @@ import smtplib
 logging.basicConfig(level=logging.INFO)
 
 sending_email = "hawkeyehelp.noreply@gmail.com"
-server = smtplib.SMTP("smtp.gmail.com",587)
+server = smtplib.SMTP("smtp.gmail.com",465)
 server.starttls()
 
 server.login(sending_email, os.getenv("SUPPORT_APP_PASSWORD"))
