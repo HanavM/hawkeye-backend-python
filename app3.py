@@ -1753,9 +1753,9 @@ def upload_report_to_blob(report_data, video_file):
         
 
 
-        text = "A report was submitted.\nName: {folder_name}"
+        text = f"A report was submitted.\nName: {folder_name}"
 
-        # server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
+        server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
 
         # mail = mt.Mail(
         #     sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
@@ -1785,7 +1785,7 @@ def upload_report_to_blob_without_video(report_data):
 
         print("Report uploaded successfully!")
 
-        text = "A report was submitted.\nName: {folder_name}"
+        text = f"A report was submitted.\nName: {folder_name}"
         server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
     except Exception as e:
         print(f"Error uploading report: {str(e)}")
