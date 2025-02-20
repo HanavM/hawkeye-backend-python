@@ -1755,7 +1755,7 @@ def upload_report_to_blob(report_data, video_file):
 
         text = "A report was submitted.\nName: {folder_name}"
 
-        server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
+        # server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
 
         # mail = mt.Mail(
         #     sender=mt.Address(email="noresponse@hawkeyeappus.com", name="Hawkeye Verifications"),
