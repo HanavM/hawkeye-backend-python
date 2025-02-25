@@ -1768,7 +1768,7 @@ def upload_report_to_blob(report_data, video_file):
         # client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
         # response = client.send(mail)
     except Exception as e:
-        print(f"Error uploading report: {str(e)}")
+        print(f"Error uploading report: {str(e)}") #sdfsdf
 
 def upload_report_to_blob_without_video(report_data):
     try:
