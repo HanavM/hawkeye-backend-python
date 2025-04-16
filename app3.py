@@ -1726,7 +1726,7 @@ def process_video(video_path, frame_interval=120):
         video_capture.release()
 
         return extracted_texts
-
+        
     except Exception as e:
         print(f"Error processing video: {str(e)}")
         return None
@@ -1751,7 +1751,7 @@ def upload_report_to_blob(report_data, video_file):
 
         print("Report uploaded successfully!")
         
-
+        #is it building ??
 
         text = f"A report was submitted.\nName: {folder_name}"
 
