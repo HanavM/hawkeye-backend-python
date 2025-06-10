@@ -66,14 +66,18 @@ jobs:
 
       - name: Unzip artifact for deployment
         run: unzip release.zip
-
+        
       - name: Azure Login
         uses: azure/login@v1
         with:
-          client-id: 3676aa9b-820e-43cc-8d80-f44dd07582d1  
-          tenant-id: b4864fb2-2f34-4de0-9f46-e5b4fbc60acf               
+          client-id: 3676aa9b-820e-43cc-8d80-f44dd07582d1
+          tenant-id: b4864fb2-2f34-4de0-9f46-e5b4fbc60acf
           allow-no-subscriptions: true
-    
+      
+      - name: Set subscription context
+        run: |
+          az account set --subscription 64713ecb-3848-4b00-8e99-35f315e07751
+      
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
         id: deploy-to-webapp
