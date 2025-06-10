@@ -1753,6 +1753,7 @@ def upload_report_to_blob(report_data, video_file):
         
         #is it building ??
 
+        #test 5 deploy pls
         text = f"A report was submitted.\nName: {folder_name}"
 
         # server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
