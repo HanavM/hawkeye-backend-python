@@ -50,7 +50,7 @@ BLOB_NAME_IG = "sessionfile"
 
 blob_service_client = BlobServiceClient.from_connection_string(connection_string_blob)
 
-client = ApifyClient("apify_api_dqcBpWGk8J2tcMR3GfBk2oSFv7xtal2D85Me")
+client = ApifyClient(os.getenv("APIFY_API"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -562,7 +562,7 @@ def register_user(user: User):
             category="Email Verification Test",
         )
 
-        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
         response = client.send(mail)
     except Exception as e:
         return JSONResponse(status_code=404, content={"detail": f"Username does not exist: {e}"})
@@ -600,7 +600,7 @@ def send_email_verification(user_email: str = Depends(get_current_user)):
                 category="Email Verification Test",
             )
 
-            client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+            client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
             response = client.send(mail)
         except Exception as e:
             return JSONResponse(status_code=404, content={"detail": f"Failed to send email: {e}"})
@@ -685,8 +685,7 @@ def request_account_deletion(user_email: str = Depends(get_current_user)):
             text=f"Click the link below to confirm account deletion:\n{deletion_url}",
             category="Account Deletion"
         )
-
-        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
         response = client.send(mail)
 
         print(response)
@@ -1123,7 +1122,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             category="Report Accepted",
         )
 
-        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
         response = client.send(mail)
 
 
@@ -1190,7 +1189,7 @@ def reject_report_admin(blob_entry_name: str = Form(...), description: str = For
         )
 
         # Send email using Mailtrap client (replace with your actual email client configuration)
-        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
         response = client.send(mail)
 
         # Return a success message
@@ -1767,7 +1766,7 @@ def upload_report_to_blob(report_data, video_file):
             category="Report Uploaded",
         )
 
-        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
         response = client.send(mail)
     except Exception as e:
         print(f"Error uploading report: {str(e)}") #sdfsdf
@@ -1799,7 +1798,7 @@ def upload_report_to_blob_without_video(report_data):
             category="Report Uploaded",
         )
 
-        client = mt.MailtrapClient(token="94cb1c26632847a5c2cef181ef7ea104")
+        client = mt.MailtrapClient(token=os.getenv("MAILTRAP_TOKEN"))
         response = client.send(mail)
         # server.sendmail(sending_email, "hawkeyereportapp@gmail.com", text)
     except Exception as e:
