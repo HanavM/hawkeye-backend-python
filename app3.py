@@ -13,6 +13,8 @@ from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 import requests
 from apify_client import ApifyClient
+from typing import List, Dict, Any
+from apify_client._errors import ApifyApiError
 import json
 import cv2
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Query
@@ -1230,7 +1232,52 @@ async def check_blob(blob_entry_name: str = Form(...)):
 
 
 
+
+INSTA_ACTOR_ID = "apify/instagram-profile-scraper"
+
+def fetch_profiles_insta(
+    usernames: List[str],
+    include_about: bool = False,
+    timeout_secs: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Runs Apify Instagram profile searcher and returns parsed results.
+    """
+
+    run_input = {
+        "includeAboutSection": include_about,
+        "usernames": usernames,
+    }
+
+    try:
+        run = client.actor(INSTA_ACTOR_ID).call(
+            run_input=run_input,
+            timeout_secs=timeout_secs
+        )
+
+        dataset_id = run["defaultDatasetId"]
+
+        results = list(
+            client.dataset(dataset_id).iterate_items()
+        )
+
+        return results
+
+    except ApifyApiError as e:
+        raise HTTPException(status_code=400, detail=f"Apify API error: {e}")
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Unexpected error while fetchinjg profiles")    
+
+
 #Searching routes
+
+@app.get("/searchInstagramTest/{username}")
+def search_instagram_test(username: str):
+    return {"user_data": fetch_profiles_insta([username])}
+
+
+
 @app.get("/getReportsByUsername/{platform}/{reported_username}", dependencies=[Depends(get_current_user)])
 def get_reports_by_username(platform: str, reported_username: str, user_email: str = Depends(get_current_user)):
     try:
