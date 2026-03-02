@@ -1,3 +1,4 @@
+import html
 import os
 import pyodbc
 import traceback
@@ -186,6 +187,14 @@ def get_display_name(username):
         if not display_name:
             display_name = soup.select_one(".Heading_h400Emphasis__SQXxl span")
         
+        bitmoji_url = soup.select_one(".UserCard_verticalSnapcode__XWFrV")
+        if bitmoji_url != None:
+            bitmoji_url = bitmoji_url.find("img")
+
+            if bitmoji_url and bitmoji_url.has_attr("src"):
+                raw_url = bitmoji_url["src"]
+                clean_url = html.unescape(raw_url)
+        
         if display_name:
             # Get the text and split into first and last name
             full_name = display_name.get_text().strip()
@@ -194,11 +203,11 @@ def get_display_name(username):
             first_name = name_parts[0]  # First part is the first name
             last_name = name_parts[1] if len(name_parts) > 1 else ""  # Second part if exists is the last name
             
-            return first_name, last_name
+            return first_name, last_name, clean_url
         else:
-            return None, None
+            return None, None, None
     else:
-        return None, None
+        return None, None, None
 
 def get_full_name_instagram(username):
     L = instaloader.Instaloader()
@@ -825,12 +834,14 @@ async def report_user(
         first_name = ""
         last_name = ""
         if platform == "snapchat":
-            first_name_temp, last_name_temp = get_display_name(reported_username)
+            first_name_temp, last_name_temp, image_link = get_display_name(reported_username)
             if not first_name_temp:
                 return JSONResponse(status_code=404, content={"detail": "Username does not exist"})
             first_name = first_name_temp
             last_name = last_name_temp
 
+        if image_link == None:
+            image_link = "na"
         
         if platform == "instagram":
             # try:
@@ -890,7 +901,8 @@ async def report_user(
             "reporter_username": reporter_username,
             "reporter_email": reporter_email,
             "first_name": first_name,
-            "last_name": last_name
+            "last_name": last_name,
+            "image_link": image_link
         }
 
         # Step 9: Upload report data and video to Azure Blob Storage if video exists
@@ -956,6 +968,7 @@ def report_user_admin(blob_entry_name: str = Form(...)):
         extracted_text_list = blob_metadata.get("extracted_text")
         first_name = blob_metadata.get("first_name")
         last_name = blob_metadata.get("last_name")
+        image_link = blob_metadata.get("image_link")
 
         # Check for required fields in metadata
         if not all([reported_username, report_cause, platform, reporter_username]):
@@ -1063,10 +1076,10 @@ def report_user_admin(blob_entry_name: str = Form(...)):
             logging.info(f"Updated report count for {reported_username}")
         else:
             cursor.execute(f"""
-                INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts)
+                INSERT INTO {table_name} (Username, {first_name_field}, {last_name_field}, Report_Counts, image_link)
                 OUTPUT INSERTED.ID
-                VALUES (?, ?, ?, ?)
-            """, (reported_username, first_name, last_name, 1))
+                VALUES (?, ?, ?, ?, ?)
+            """, (reported_username, first_name, last_name, 1, image_link))
             new_user_id_row = cursor.fetchone()
             if new_user_id_row is None:
                 logging.error("Failed to retrieve User ID after insertion")
@@ -1529,7 +1542,8 @@ def search_users_by_prefix(platform: str, prefix: str):
                 "Username": user.Username,
                 first_name_field: getattr(user, first_name_field),
                 last_name_field: getattr(user, last_name_field),
-                "Report_Counts": user.Report_Counts
+                "Report_Counts": user.Report_Counts,
+                "image_link": user.image_link
             })
 
         return {"users": users_data}
