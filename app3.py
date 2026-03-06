@@ -796,6 +796,65 @@ def fetch_user_profile(email: str):
         raise HTTPException(status_code=404, detail="User profile not found")
 
 
+INSTA_ACTOR_ID = "apify/instagram-profile-scraper"
+
+def fetch_profiles_insta(
+    usernames: List[str],
+    include_about: bool = False,
+    timeout_secs: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Runs Apify Instagram profile searcher and returns parsed results.
+    """
+
+    # print(os.getenv("APIFY_API"))
+    client = ApifyClient(os.getenv("APIFY_API"))
+    INSTA_ACTOR_ID = "apify/instagram-profile-scraper"
+    run_input = {
+        "includeAboutSection": include_about,
+        "usernames": usernames,
+    }
+
+    try:
+        run = client.actor(INSTA_ACTOR_ID).call(
+            run_input=run_input,
+            timeout_secs=timeout_secs
+        )
+
+        dataset_id = run["defaultDatasetId"]
+
+        results = list(
+            client.dataset(dataset_id).iterate_items()
+        )
+
+        return results
+
+    except ApifyApiError as e:
+        return f"Apify API error: {e}"
+
+    except Exception as e:
+        return "Unexpected error while fetchinjg profiles"
+
+
+
+logger = logging.getLogger(__name__)
+
+
+def get_profiles_insta(usernames: list[str]):
+    try:
+        results = fetch_profiles_insta(usernames)
+        return {"success": True, "data": results}
+    except Exception:
+        return ("Instagram lookup failed")
+
+
+
+#Searching routes
+
+@app.get("/searchInstagramTest/{username}")
+def search_instagram_test(username: str):
+    return {"user_data": fetch_profiles_insta([username])}
+
 
 
 #Reporting routes
@@ -844,33 +903,27 @@ async def report_user(
             image_link = "na"
         
         if platform == "instagram":
-            # try:
-            #     profile_data = Instagram.scrap(reported_username)
-            #     profile_data = json.loads(profile_data)
-            #     # print(profile_data)
-            #     full_name = profile_data["full_name"]
-            #     first_name_temp = ""
-            #     last_name_temp = ""
+            try:
 
-            #     if full_name:
-            #         name_parts = full_name.split(" ")
-            #         first_name_temp = name_parts[0]
-            #         last_name_temp = name_parts[1] if len(name_parts) > 1 else ""
+                results_insta = get_profiles_insta([reported_username])
+                if (results_insta["success"] == False):
+                    return JSONResponse(status_code=404, content={"detail": f"Username does not exist instagram"})
                 
-            #     first_name = first_name_temp
-            #     last_name = last_name_temp
-            # except Exception as e:
-            #     return JSONResponse(status_code=404, content={"detail": f"Username does not exist instagram, error: {e}"})
+                image_link = results_insta["data"][0]["profilePicUrlHD"]
+                full_name = results_insta["data"][0]["fullName"]
 
+                first_name_temp = ""
+                last_name_temp = ""
 
-
-            first_name_temp, last_name_temp, error = get_full_name_instagram(reported_username)
-            if error:
-                return JSONResponse(status_code=404, content={"detail": f"Username does not exist. Platform: {str(platform)}, Username: {str(reported_username)}, firstname: {str(first_name_temp)}, lastname: {str(last_name_temp)}, error: {str(error)}"})
-            else:
+                if full_name:
+                    name_parts = full_name.split(" ")
+                    first_name_temp = name_parts[0]
+                    last_name_temp = name_parts[1] if len(name_parts) > 1 else ""
+                
                 first_name = first_name_temp
                 last_name = last_name_temp
-
+            except Exception as e:
+                return JSONResponse(status_code=404, content={"detail": f"Username does not exist instagram, error: {e}"})
 
         # Step 5: Ensure the directory for video files exists if video is provided
         video_path = None
@@ -1246,48 +1299,7 @@ async def check_blob(blob_entry_name: str = Form(...)):
 
 
 
-INSTA_ACTOR_ID = "apify/instagram-profile-scraper"
 
-def fetch_profiles_insta(
-    usernames: List[str],
-    include_about: bool = False,
-    timeout_secs: int = 30
-) -> List[Dict[str, Any]]:
-    """
-    Runs Apify Instagram profile searcher and returns parsed results.
-    """
-
-    run_input = {
-        "includeAboutSection": include_about,
-        "usernames": usernames,
-    }
-
-    try:
-        run = client.actor(INSTA_ACTOR_ID).call(
-            run_input=run_input,
-            timeout_secs=timeout_secs
-        )
-
-        dataset_id = run["defaultDatasetId"]
-
-        results = list(
-            client.dataset(dataset_id).iterate_items()
-        )
-
-        return results
-
-    except ApifyApiError as e:
-        raise HTTPException(status_code=400, detail=f"Apify API error: {e}")
-
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Unexpected error while fetchinjg profiles")    
-
-
-#Searching routes
-
-@app.get("/searchInstagramTest/{username}")
-def search_instagram_test(username: str):
-    return {"user_data": fetch_profiles_insta([username])}
 
 
 

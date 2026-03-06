@@ -5,8 +5,7 @@ from apify_client import ApifyClient
 from apify_client._errors import ApifyApiError
 
 
-client = ApifyClient(os.getenv("APIFY_API"))
-INSTA_ACTOR_ID = "apify/instagram-profile-scraper"
+
 
 def fetch_profiles_insta(
     usernames: List[str],
@@ -17,6 +16,9 @@ def fetch_profiles_insta(
     Runs Apify Instagram profile searcher and returns parsed results.
     """
 
+    # print(os.getenv("APIFY_API"))
+    client = ApifyClient(os.getenv("APIFY_API"))
+    INSTA_ACTOR_ID = "apify/instagram-profile-scraper"
     run_input = {
         "includeAboutSection": include_about,
         "usernames": usernames,
@@ -46,12 +48,6 @@ def fetch_profiles_insta(
 
 logger = logging.getLogger(__name__)
 
-APIFY_TOKEN = os.getenv("APIFY_TOKEN")
-ACTOR_ID = "YOUR_USERNAME/instagram-profile-searcher"
-
-if not APIFY_TOKEN:
-    raise RuntimeError("APIFY_TOKEN not set in environment variables")
-
 
 def get_profiles(usernames: list[str]):
     try:
@@ -60,4 +56,11 @@ def get_profiles(usernames: list[str]):
     except Exception:
         return ("Instagram lookup failed")
 
-print(get_profiles(["hanavmodasiya"]))
+d = get_profiles(["hanavmodasiya"])
+# print(d)  
+if (d["success"] == False):
+    print("Username doesnt exist")
+else:
+    print(d["data"][0]["username"])
+    print(d["data"][0]["fullName"])
+    print(d["data"][0]["profilePicUrlHD"])
