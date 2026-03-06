@@ -899,8 +899,7 @@ async def report_user(
             first_name = first_name_temp
             last_name = last_name_temp
 
-        if image_link == None:
-            image_link = "na"
+
         
         if platform == "instagram":
             try:
@@ -925,6 +924,9 @@ async def report_user(
             except Exception as e:
                 return JSONResponse(status_code=404, content={"detail": f"Username does not exist instagram, error: {e}"})
 
+
+        if image_link == None:
+            image_link = "na"
         # Step 5: Ensure the directory for video files exists if video is provided
         video_path = None
         if video:
