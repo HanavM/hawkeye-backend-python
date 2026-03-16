@@ -1311,13 +1311,11 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Validate platform input
         platform = platform.lower()
         valid_platforms = ["snapchat", "instagram", "tinder"]
         if platform not in valid_platforms:
             raise HTTPException(status_code=400, detail="Invalid platform. Use 'snapchat', 'instagram', or 'tinder'.")
 
-        # Determine the correct table and foreign key column based on the platform
         if platform == "snapchat":
             table_name = "ReportedUsersSnapchat"
             foreign_key_column = "SnapchatUserID"
@@ -1328,7 +1326,6 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
             table_name = "ReportedUsersTinder"
             foreign_key_column = "TinderUserID"
 
-        # Check if the user exists in the platform-specific table
         cursor.execute(f"SELECT ID FROM {table_name} WHERE Username = ?", reported_username)
         user_row = cursor.fetchone()
 
@@ -1337,18 +1334,15 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
 
         user_id = user_row[0]
 
-        # Fetch all Report IDs linked to the user in the platform-specific foreign key column
         cursor.execute(f"SELECT ReportID FROM ReportedUsersReports WHERE {foreign_key_column} = ?", user_id)
         report_ids = [row[0] for row in cursor.fetchall()]
 
         if not report_ids:
             return {"message": "No reports found for this user"}
 
-        # Fetch all the reports using the report IDs
         cursor.execute(f"SELECT * FROM Reports WHERE ID IN ({','.join('?' * len(report_ids))})", *report_ids)
         reports = cursor.fetchall()
 
-        # Format the results
         reports_data = []
         for report in reports:
             reports_data.append({
@@ -1360,53 +1354,55 @@ def get_reports_by_username(platform: str, reported_username: str, user_email: s
                 "Report_Description": report.Report_Description
             })
 
-        # Retrieve first name and last name of the reported user
-        cursor.execute(f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName FROM {table_name} WHERE Username = ?", reported_username)
+        # Retrieve first name, last name, and image_link
+        cursor.execute(
+            f"SELECT {platform.capitalize()}_Account_FirstName, {platform.capitalize()}_Account_LastName, image_link FROM {table_name} WHERE Username = ?",
+            reported_username
+        )
         name_row = cursor.fetchone()
 
         if name_row:
-            reported_firstname, reported_lastname = name_row[0], name_row[1]
+            reported_firstname, reported_lastname, image_link = name_row[0], name_row[1], name_row[2]
         else:
-            reported_firstname, reported_lastname = "Unknown", "Unknown"
+            reported_firstname, reported_lastname, image_link = "Unknown", "Unknown", None
 
-        # Fetch the user's profile to update the Previously_Searched field and increment searched_count
         cursor.execute("SELECT Previously_Searched, searched_count FROM UserProfiles WHERE Email = ?", user_email)
         user_profile = cursor.fetchone()
 
         if user_profile:
             previously_searched = user_profile[0].split(',') if user_profile[0] else []
 
-            # Check if the username|platform combo already exists
-            search_entry = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}"
+            # Updated entry including image_link
+            search_entry = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}|{image_link}"
+
             if search_entry in previously_searched:
                 previously_searched.remove(search_entry)
 
-            # Keep only the last 10 searches
             if len(previously_searched) >= 10:
                 previously_searched = previously_searched[:9]
-            
-            # Add the new search entry
+
             previously_searched.insert(0, search_entry)
 
             updated_searched = ','.join(previously_searched)
 
-            # Check if searched_count is None and set it to 0 if necessary
             searched_count = user_profile[1] if user_profile[1] is not None else 0
             searched_count += 1
 
-            # Update the Previously_Searched and searched_count fields in the database
-            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
+            cursor.execute(
+                "UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?",
+                updated_searched, searched_count, user_email
+            )
         else:
-            # If the user hasn't searched before, start with the current search and set the searched_count to 1
-            updated_searched = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}"
+            updated_searched = f"{reported_username}|{platform}|{reported_firstname}|{reported_lastname}|{image_link}"
             searched_count = 1
 
-            # Update the Previously_Searched and searched_count fields in the database
-            cursor.execute("UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?", updated_searched, searched_count, user_email)
+            cursor.execute(
+                "UPDATE UserProfiles SET Previously_Searched = ?, searched_count = ? WHERE Email = ?",
+                updated_searched, searched_count, user_email
+            )
 
         conn.commit()
 
-        # Include the first name and last name in the response
         return {
             "reports": reports_data,
             "reported_user_firstname": reported_firstname,
@@ -1423,44 +1419,54 @@ def get_previously_searched(user_email: str = Depends(get_current_user)):
         conn = get_conn()
         cursor = conn.cursor()
 
-        # Fetch the previously searched values from the UserProfiles table
         cursor.execute("SELECT Previously_Searched FROM UserProfiles WHERE Email = ?", user_email)
         user_profile = cursor.fetchone()
 
         if user_profile and user_profile[0]:
-            # Split the previously searched string into an array
             previously_searched_raw = user_profile[0].split(',')
 
-            # Create a list to store previously searched entries
             previously_searched = []
 
             for search_item in previously_searched_raw:
-                # Check if the stored value contains all parts: username, platform, first name, last name
                 parts = search_item.split('|')
-                if len(parts) == 4:
+
+                if len(parts) == 5:
+                    username, platform, first_name, last_name, image_link = parts
+                    previously_searched.append({
+                        "username": username,
+                        "platform": platform,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "image_link": image_link
+                    })
+
+                elif len(parts) == 4:
                     username, platform, first_name, last_name = parts
                     previously_searched.append({
                         "username": username,
                         "platform": platform,
                         "first_name": first_name,
-                        "last_name": last_name
+                        "last_name": last_name,
+                        "image_link": None
                     })
+
                 elif len(parts) == 2:
-                    # Handle older entries with just username and platform
                     username, platform = parts
                     previously_searched.append({
                         "username": username,
                         "platform": platform,
                         "first_name": "Unknown",
-                        "last_name": "Unknown"
+                        "last_name": "Unknown",
+                        "image_link": None
                     })
+
                 else:
-                    # Handle incomplete or invalid entries
                     previously_searched.append({
                         "username": parts[0],
                         "platform": "unknown",
                         "first_name": "Unknown",
-                        "last_name": "Unknown"
+                        "last_name": "Unknown",
+                        "image_link": None
                     })
         else:
             previously_searched = []
